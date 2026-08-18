@@ -1,82 +1,134 @@
-require("dotenv").config();
+require("./setting.js");
+require("./lib/myfunction.js");
+require("./lib/message.js");
 
 const {
   default: makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
-  fetchLatestBaileysVersion
-} = require("@whiskeysockets/baileys");
+  fetchLatestBaileysVersion,
+  downloadContentFromMessage,
+  jidDecode,
+  makeInMemoryStore
+} = require("baileys");
 
-const P = require("pino");
 const readline = require("readline");
-const qrcode = require("qrcode-terminal");
+const pino = require("pino");
+const fs = require("fs");
+const chalk = require("chalk");
 
-const {
-  print,
-  sleep
-} = require("./lib/myfunction");
+const serialize = require("./lib/serialize.js");
+const FileType = require("file-type");
 
-const SESSION_DIR = process.env.SESSION_DIR || "./session";
+global.groupMetadataCache = new Map();
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
+const SESSION_DIR =
+  process.env.SESSION_DIR || "./session";
 
 function ask(question) {
   return new Promise((resolve) => {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+
     rl.question(question, (answer) => {
+      rl.close();
       resolve(answer.trim());
     });
   });
 }
 
-function normalizeNumber(number) {
-  return number
-    .replace(/\D/g, "")
-    .replace(/^0+/, "");
-}
-
 async function getPairingNumber() {
-  let number = await ask(
-    "\n📱 Masukkan nomor WhatsApp untuk pairing\n" +
-    "   Contoh: 6281234567890\n\n" +
-    "Nomor WhatsApp: "
-  );
+  while (true) {
+    console.log(
+      chalk.cyan(
+        "\n╭────────────────────────────────────╮"
+      )
+    );
 
-  number = normalizeNumber(number);
+    console.log(
+      chalk.cyan(
+        "│        WHATSAPP PAIRING NDZ BOT    │"
+      )
+    );
 
-  if (!number || number.length < 10) {
-    console.log("\n❌ Nomor tidak valid.");
-    return getPairingNumber();
+    console.log(
+      chalk.cyan(
+        "╰────────────────────────────────────╯"
+      )
+    );
+
+    console.log(
+      chalk.yellow(
+        "\nMasukkan nomor WhatsApp untuk pairing."
+      )
+    );
+
+    console.log(
+      chalk.gray(
+        "Contoh: 6281234567890"
+      )
+    );
+
+    console.log(
+      chalk.gray(
+        "Gunakan format negara, tanpa +, spasi, atau -.\n"
+      )
+    );
+
+    let number = await ask(
+      chalk.white("Nomor WhatsApp: ")
+    );
+
+    number = number.replace(/\D/g, "");
+
+    if (!number || number.length < 10) {
+      console.log(
+        chalk.red(
+          "\n❌ Nomor WhatsApp tidak valid."
+        )
+      );
+
+      continue;
+    }
+
+    return number;
   }
-
-  return number;
 }
 
 async function startBot() {
   try {
-    const { state, saveCreds } =
-      await useMultiFileAuthState(SESSION_DIR);
+    const store = makeInMemoryStore({
+      logger: pino().child({
+        level: "silent",
+        stream: "store"
+      })
+    });
 
-    let version;
+    const {
+      state,
+      saveCreds
+    } = await useMultiFileAuthState(
+      SESSION_DIR
+    );
 
-    try {
-      const latest = await fetchLatestBaileysVersion();
-      version = latest.version;
-    } catch {
-      version = [2, 3000, 1015901307];
-    }
+    const {
+      version
+    } = await fetchLatestBaileysVersion();
 
     const sock = makeWASocket({
       version,
+
       auth: state,
 
-      logger: P({
-        level: process.env.LOG_LEVEL || "silent"
+      printQRInTerminal: false,
+
+      logger: pino({
+        level: "silent"
       }),
 
-      printQRInTerminal: false,
+      generateHighQualityLinkPreview: true,
 
       browser: [
         "NDZ BOT",
@@ -84,14 +136,40 @@ async function startBot() {
         "1.0.0"
       ],
 
-      generateHighQualityLinkPreview: true,
+      getMessage: async (key) => {
+        if (!store) return undefined;
 
-      markOnlineOnConnect: false,
+        const msg =
+          await store.loadMessage(
+            key.remoteJid,
+            key.id
+          );
 
-      syncFullHistory: false
+        return msg?.message || undefined;
+      },
+
+      cachedGroupMetadata: async (jid) => {
+        if (
+          !global.groupMetadataCache.has(jid)
+        ) {
+          const metadata =
+            await sock
+              .groupMetadata(jid)
+              .catch(() => null);
+
+          if (metadata) {
+            global.groupMetadataCache.set(
+              jid,
+              metadata
+            );
+          }
+
+          return metadata;
+        }
+
+        return global.groupMetadataCache.get(jid);
+      }
     });
-
-    sock.ev.on("creds.update", saveCreds);
 
     /*
     ========================================================
@@ -100,42 +178,93 @@ async function startBot() {
     */
 
     if (!sock.authState.creds.registered) {
-      const phoneNumber = await getPairingNumber();
+      const pairingNumber =
+        await getPairingNumber();
 
-      console.log("\n⏳ Meminta kode pairing...");
-      console.log("📱 Nomor:", phoneNumber);
+      console.log(
+        chalk.white(
+          "\n⏳ Meminta kode pairing..."
+        )
+      );
 
-      await sleep(3000);
+      await new Promise((resolve) =>
+        setTimeout(resolve, 2000)
+      );
 
       try {
-        const code = await sock.requestPairingCode(phoneNumber);
+        const code =
+          await sock.requestPairingCode(
+            pairingNumber
+          );
 
-        const formattedCode =
-          code
-            ?.match(/.{1,4}/g)
-            ?.join("-") || code;
-
-        console.log("\n");
-        console.log("╔════════════════════════════════════╗");
-        console.log("║          NDZ BOT PAIRING           ║");
-        console.log("╠════════════════════════════════════╣");
-        console.log(`║  KODE: ${formattedCode.padEnd(26)}║`);
-        console.log("╚════════════════════════════════════╝");
-        console.log("\n👉 Buka WhatsApp");
-        console.log("👉 Perangkat tertaut");
-        console.log("👉 Tautkan perangkat");
-        console.log("👉 Tautkan dengan nomor telepon");
-        console.log(`👉 Masukkan kode: ${formattedCode}`);
-        console.log("\n⏳ Menunggu WhatsApp terhubung...\n");
-
-      } catch (error) {
-        console.error(
-          "\n❌ Gagal mendapatkan kode pairing:"
+        console.log(
+          chalk.green(
+            "\n╭────────────────────────────────────╮"
+          )
         );
 
-        console.error(error?.message || error);
+        console.log(
+          chalk.green(
+            `│  KODE PAIRING: ${code}          │`
+          )
+        );
+
+        console.log(
+          chalk.green(
+            "╰────────────────────────────────────╯"
+          )
+        );
+
+        console.log(
+          chalk.yellow(
+            "\nBuka WhatsApp → Perangkat tertaut"
+          )
+        );
+
+        console.log(
+          chalk.yellow(
+            "→ Tautkan perangkat → Tautkan dengan nomor telepon"
+          )
+        );
+
+        console.log(
+          chalk.gray(
+            "\nMasukkan kode pairing tersebut."
+          )
+        );
+
+        console.log(
+          chalk.gray(
+            "⏳ Menunggu WhatsApp terhubung...\n"
+          )
+        );
+      } catch (error) {
+        console.log(
+          chalk.red(
+            "\n❌ Gagal meminta kode pairing:"
+          )
+        );
+
+        console.log(
+          error?.message || error
+        );
+
+        return;
       }
     }
+
+    /*
+    ========================================================
+    SAVE SESSION
+    ========================================================
+    */
+
+    sock.ev.on(
+      "creds.update",
+      saveCreds
+    );
+
+    store.bind(sock.ev);
 
     /*
     ========================================================
@@ -145,72 +274,118 @@ async function startBot() {
 
     sock.ev.on(
       "connection.update",
-      async (update) => {
-        const {
-          connection,
-          lastDisconnect,
-          qr
-        } = update;
-
-        if (qr) {
-          console.log("\n📷 QR Code tersedia:\n");
-          qrcode.generate(qr, {
-            small: true
-          });
-        }
+      async ({
+        connection,
+        lastDisconnect
+      }) => {
 
         if (connection === "connecting") {
-          console.log("🔄 Menghubungkan ke WhatsApp...");
+          console.log(
+            chalk.yellow(
+              "🔄 Menghubungkan ke WhatsApp..."
+            )
+          );
         }
 
         if (connection === "open") {
-          console.log("\n");
-          console.log("╔════════════════════════════════════╗");
-          console.log("║          NDZ BOT ONLINE            ║");
-          console.log("╠════════════════════════════════════╣");
-          console.log("║  Status : Connected                ║");
-          console.log("║  Session: Tersimpan                ║");
-          console.log("╚════════════════════════════════════╝");
-          console.log("\n✅ Bot siap digunakan.\n");
+          const botNumber =
+            sock?.user?.id
+              ?.split(":")[0] +
+            "@s.whatsapp.net";
 
-          rl.close();
+          console.log("\n");
+
+          console.log(
+            chalk.green(
+              "╭────────────────────────────────────╮"
+            )
+          );
+
+          console.log(
+            chalk.green(
+              "│          NDZ BOT ONLINE             │"
+            )
+          );
+
+          console.log(
+            chalk.green(
+              "╰────────────────────────────────────╯"
+            )
+          );
+
+          console.log(
+            chalk.white(
+              `\n• Nama     : ${
+                sock?.user?.name ||
+                "Tidak terdeteksi"
+              }`
+            )
+          );
+
+          console.log(
+            chalk.white(
+              `• WhatsApp : ${
+                botNumber.split("@")[0]
+              }`
+            )
+          );
+
+          console.log(
+            chalk.green(
+              "• Status   : Connected"
+            )
+          );
+
+          console.log(
+            chalk.green(
+              "\n✅ Bot siap digunakan.\n"
+            )
+          );
         }
 
         if (connection === "close") {
-          const statusCode =
-            lastDisconnect?.error?.output?.statusCode;
+          const reason =
+            lastDisconnect
+              ?.error
+              ?.output
+              ?.statusCode;
 
-          const shouldReconnect =
-            statusCode !== DisconnectReason.loggedOut;
-
-          console.log("\n❌ Koneksi WhatsApp terputus.");
-
-          if (statusCode) {
+          if (
+            reason ===
+            DisconnectReason.loggedOut
+          ) {
             console.log(
-              "Status:",
-              statusCode
+              chalk.red(
+                "\n❌ WhatsApp logout."
+              )
             );
+
+            console.log(
+              chalk.yellow(
+                `Hapus ${SESSION_DIR} kemudian jalankan npm start lagi.`
+              )
+            );
+
+            return;
           }
 
-          if (shouldReconnect) {
-            console.log(
-              "🔄 Mencoba menghubungkan kembali...\n"
-            );
+          console.log(
+            chalk.yellow(
+              "\n⚠️ Koneksi terputus."
+            )
+          );
 
-            await sleep(5000);
+          console.log(
+            chalk.cyan(
+              "🔄 Menghubungkan kembali dalam 5 detik..."
+            )
+          );
 
-            startBot();
-          } else {
-            console.log(
-              "\n⚠️ Session logout."
-            );
+          await new Promise((resolve) =>
+            setTimeout(resolve, 5000)
+          );
 
-            console.log(
-              "Hapus folder session kemudian jalankan ulang."
-            );
-
-            process.exit(1);
-          }
+          startBot();
         }
       }
     );
@@ -221,42 +396,350 @@ async function startBot() {
     ========================================================
     */
 
-    try {
-      const messageHandler =
-        require("./message");
+    sock.ev.on(
+      "messages.upsert",
+      async ({
+        messages
+      }) => {
+
+        try {
+          const msg = messages[0];
+
+          if (!msg?.message) return;
+
+          if (
+            msg.key?.remoteJid ===
+            "status@broadcast"
+          ) {
+            return;
+          }
+
+          const m =
+            await serialize(
+              sock,
+              msg
+            );
+
+          require("./message.js")(
+            sock,
+            m
+          );
+
+        } catch (error) {
+          console.log(
+            chalk.red(
+              "Message Error:"
+            ),
+            error?.message ||
+              error
+          );
+        }
+      }
+    );
+
+    /*
+    ========================================================
+    GROUP PARTICIPANTS
+    ========================================================
+    */
+
+    sock.ev.on(
+      "group-participants.update",
+      async (update) => {
+
+        try {
+          const {
+            id,
+            author,
+            participants,
+            action
+          } = update;
+
+          const groupMetadata =
+            await sock
+              .groupMetadata(id);
+
+          global.groupMetadataCache.set(
+            id,
+            groupMetadata
+          );
+
+          const database =
+            JSON.parse(
+              fs.readFileSync(
+                "./collection/database.json",
+                "utf8"
+              )
+            );
+
+          if (!database.welcome) {
+            return;
+          }
+
+          const groupSubject =
+            groupMetadata.subject;
+
+          const commonMessageSuffix =
+            `\n\n📢 Jangan lupa join grup :\n${
+              global.linkgroup || ""
+            }`;
+
+          for (
+            const participant
+            of participants
+          ) {
+
+            const participantId =
+              typeof participant ===
+              "string"
+                ? participant
+                : participant?.id;
+
+            if (!participantId) continue;
+
+            const participantName =
+              participantId.split("@")[0];
+
+            const authorName =
+              author
+                ? author.split("@")[0]
+                : "";
+
+            let messageText = "";
+
+            switch (action) {
+
+              case "add":
+
+                messageText =
+                  !author
+                    ? `@${participantName} Selamat datang di grup ${groupSubject}`
+                    : `@${authorName} Telah *menambahkan* @${participantName} ke dalam grup.`;
+
+                break;
+
+              case "remove":
+
+                messageText =
+                  !author
+                    ? `@${participantName} Telah *keluar* dari grup.`
+                    : `@${authorName} Telah *mengeluarkan* @${participantName} dari grup.`;
+
+                break;
+
+              case "promote":
+
+                messageText =
+                  `@${authorName} Telah *menjadikan* @${participantName} sebagai *admin* grup.`;
+
+                break;
+
+              case "demote":
+
+                messageText =
+                  `@${authorName} Telah *menghentikan* @${participantName} sebagai *admin* grup.`;
+
+                break;
+
+              default:
+                continue;
+            }
+
+            messageText +=
+              commonMessageSuffix;
+
+            await sock.sendMessage(
+              id,
+              {
+                text: messageText,
+
+                mentions: [
+                  ...(author
+                    ? [author]
+                    : []),
+                  participantId
+                ]
+              }
+            );
+          }
+
+        } catch (error) {
+          console.log(
+            chalk.red(
+              "Group Event Error:"
+            ),
+            error?.message ||
+              error
+          );
+        }
+      }
+    );
+
+    /*
+    ========================================================
+    HELPERS
+    ========================================================
+    */
+
+    sock.toLid = async (pn) => pn;
+
+    sock.decodeJid = (jid) => {
+
+      if (!jid) return jid;
 
       if (
-        typeof messageHandler === "function"
+        /:\d+@/gi.test(jid)
       ) {
-        sock.ev.on(
-          "messages.upsert",
-          async (chatUpdate) => {
-            try {
-              await messageHandler(
-                sock,
-                chatUpdate
-              );
-            } catch (error) {
-              console.error(
-                "Message handler error:",
-                error
-              );
-            }
-          }
-        );
+
+        const decode =
+          jidDecode(jid) || {};
+
+        if (
+          decode.user &&
+          decode.server
+        ) {
+          return `${decode.user}@${decode.server}`;
+        }
+
+        return jid;
       }
-    } catch (error) {
-      console.log(
-        "⚠️ message.js belum aktif:",
-        error.message
-      );
-    }
+
+      return jid;
+    };
+
+    sock.downloadMediaMessage =
+      async (
+        m,
+        type,
+        filename = ""
+      ) => {
+
+        if (
+          !m ||
+          !(m.url || m.directPath)
+        ) {
+          return Buffer.alloc(0);
+        }
+
+        const stream =
+          await downloadContentFromMessage(
+            m,
+            type
+          );
+
+        let buffer =
+          Buffer.alloc(0);
+
+        for await (
+          const chunk of stream
+        ) {
+          buffer = Buffer.concat([
+            buffer,
+            chunk
+          ]);
+        }
+
+        if (filename) {
+          await fs.promises.writeFile(
+            filename,
+            buffer
+          );
+        }
+
+        return filename &&
+          fs.existsSync(filename)
+          ? filename
+          : buffer;
+      };
+
+    sock.downloadAndSaveMediaMessage =
+      async (
+        message,
+        filename,
+        attachExtension = true
+      ) => {
+
+        const quoted =
+          message.msg
+            ? message.msg
+            : message;
+
+        const mime =
+          (message.msg || message)
+            .mimetype || "";
+
+        const messageType =
+          message.mtype
+            ? message.mtype.replace(
+                /Message/gi,
+                ""
+              )
+            : mime.split("/")[0];
+
+        const fil = Date.now();
+
+        const stream =
+          await downloadContentFromMessage(
+            quoted,
+            messageType
+          );
+
+        let buffer =
+          Buffer.alloc(0);
+
+        for await (
+          const chunk of stream
+        ) {
+          buffer = Buffer.concat([
+            buffer,
+            chunk
+          ]);
+        }
+
+        const type =
+          await FileType.fromBuffer(
+            buffer
+          );
+
+        const ext =
+          type?.ext || "bin";
+
+        const trueFileName =
+          attachExtension
+            ? `./sampah/${fil}.${ext}`
+            : filename;
+
+        if (
+          !fs.existsSync("./sampah")
+        ) {
+          fs.mkdirSync(
+            "./sampah",
+            {
+              recursive: true
+            }
+          );
+        }
+
+        fs.writeFileSync(
+          trueFileName,
+          buffer
+        );
+
+        return trueFileName;
+      };
 
     return sock;
 
   } catch (error) {
-    console.error(
-      "\n❌ Fatal error:",
+
+    console.log(
+      chalk.red(
+        "\n❌ Gagal menjalankan bot:"
+      )
+    );
+
+    console.log(
+      error?.stack ||
       error
     );
 
@@ -264,17 +747,13 @@ async function startBot() {
   }
 }
 
-/*
-============================================================
-START
-============================================================
-*/
-
 process.on(
   "uncaughtException",
   (error) => {
-    console.error(
-      "Uncaught Exception:",
+    console.log(
+      chalk.red(
+        "Uncaught Exception:"
+      ),
       error
     );
   }
@@ -283,8 +762,10 @@ process.on(
 process.on(
   "unhandledRejection",
   (error) => {
-    console.error(
-      "Unhandled Rejection:",
+    console.log(
+      chalk.red(
+        "Unhandled Rejection:"
+      ),
       error
     );
   }
