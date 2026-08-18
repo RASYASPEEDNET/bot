@@ -1,22 +1,42 @@
 {
   "name": "ndz-bot",
-  "version": "1.0.0",
+  "version": "7.0.0",
   "description": "NDZ WhatsApp Bot - Termux & VPS",
   "main": "index.js",
+  "private": true,
   "type": "commonjs",
+
   "scripts": {
     "start": "node index.js",
-    "dev": "node --watch index.js"
+    "dev": "node --watch index.js",
+
+    "pm2": "pm2 start ecosystem.config.cjs",
+    "stop": "pm2 stop ndz-bot",
+    "restart": "pm2 restart ndz-bot",
+    "logs": "pm2 logs ndz-bot"
   },
+
+  "engines": {
+    "node": ">=20"
+  },
+
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.18",
-    "axios": "^1.7.9",
-    "cheerio": "^1.0.0",
+    "@hapi/boom": "^10.0.0",
+    "@itsukichan/baileys": "latest",
+    "baileys": "npm:@yudzxml/baileys@latest",
+
+    "axios": "^0.24.0",
     "chalk": "^4.1.2",
-    "dotenv": "^16.4.7",
-    "form-data": "^4.0.1",
-    "pino": "^9.6.0",
-    "qrcode-terminal": "^0.12.0",
-    "ssh2": "^1.16.0"
+    "cheerio": "^1.0.0",
+    "dotenv": "^16.6.1",
+    "file-type": "^16.5.3",
+    "form-data": "^4.0.0",
+    "jimp": "^0.22.12",
+    "moment-timezone": "^0.5.34",
+    "node-upload-images": "^1.0.1",
+    "pino": "^8.0.0",
+    "ssh2": "^1.17.0",
+    "util": "^0.12.5",
+    "wa-sticker-formatter": "^4.4.4"
   }
 }
