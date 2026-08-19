@@ -23,7 +23,7 @@
     "@hapi/boom": "10.0.0",
     "@itsukichan/baileys": "latest",
     "axios": "1.11.0",
-    "baileys": "npm:@yudzxml/baileys@7.4.3",
+    "baileys": "npm:@yudzxml/baileys@latest",
     "chalk": "4.1.2",
     "cheerio": "1.0.0",
     "dotenv": "16.6.1",
