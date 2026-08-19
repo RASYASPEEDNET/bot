@@ -6,10 +6,10 @@ const {
     default: makeWASocket,
     useMultiFileAuthState,
     DisconnectReason,
-    fetchLatestBaileysVersion,
     downloadContentFromMessage,
     jidDecode,
-    makeInMemoryStore
+    makeInMemoryStore,
+    Browsers
 } = require("baileys");
 
 const readline = require("readline");
@@ -20,14 +20,11 @@ const serialize = require("./lib/serialize.js");
 const FileType = require("file-type");
 
 global.groupMetadataCache = new Map();
+global.botNumber = "";
 
-let reconnectTimer = null;
-let isStarting = false;
-let pairingNumber = null;
-
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
+/* =========================================================
+   ASK INPUT
+========================================================= */
 
 async function ask(question) {
     const rl = readline.createInterface({
@@ -35,77 +32,49 @@ async function ask(question) {
         output: process.stdout
     });
 
-    return new Promise(resolve => {
-        rl.question(question, answer => {
+    return new Promise((resolve) => {
+        rl.question(question, (answer) => {
             rl.close();
             resolve(answer.trim());
         });
     });
 }
 
+/* =========================================================
+   PAIRING NUMBER
+========================================================= */
+
 async function getPairingNumber() {
     while (true) {
-        const input = await ask(
+        let number = await ask(
             "\n📱 Masukkan nomor WhatsApp untuk pairing\n" +
             "Contoh: 6281234567890\n" +
-            "Nomor: "
+            "Nomor WhatsApp: "
         );
 
-        // HANYA angka
-        const number = input.replace(/\D/g, "");
+        // Hapus semua karakter selain angka
+        number = number.replace(/\D/g, "");
 
-        if (!number) {
-            console.log(chalk.red("❌ Nomor tidak boleh kosong."));
-            continue;
+        if (number.length >= 10) {
+            return number;
         }
 
-        if (number.length < 10) {
-            console.log(
-                chalk.red(
-                    "❌ Nomor terlalu pendek. Gunakan format internasional."
-                )
-            );
-            continue;
-        }
-
-        if (number.startsWith("0")) {
-            console.log(
-                chalk.yellow(
-                    "⚠️ Jangan gunakan 0 di depan.\n" +
-                    "Contoh Indonesia: 6281234567890"
-                )
-            );
-            continue;
-        }
-
-        return number;
+        console.log(
+            chalk.red(
+                "❌ Nomor tidak valid.\n" +
+                "Gunakan format internasional tanpa +, spasi atau -.\n" +
+                "Contoh: 6281234567890"
+            )
+        );
     }
 }
 
-function getDisconnectReason(lastDisconnect) {
-    try {
-        return (
-            lastDisconnect?.error?.output?.statusCode ||
-            lastDisconnect?.error?.statusCode ||
-            lastDisconnect?.error?.data?.statusCode ||
-            null
-        );
-    } catch {
-        return null;
-    }
-}
+/* =========================================================
+   START BOT
+========================================================= */
 
 async function startBot() {
-    if (isStarting) return;
-    isStarting = true;
-
     try {
-        const sessionDir = process.env.SESSION_DIR || "./session";
-
-        fs.mkdirSync(sessionDir, { recursive: true });
-        fs.mkdirSync("./sampah", { recursive: true });
-        fs.mkdirSync("./logs", { recursive: true });
-
         const store = makeInMemoryStore({
             logger: pino({
                 level: "silent"
@@ -115,44 +84,39 @@ async function startBot() {
             })
         });
 
-        const { state, saveCreds } =
-            await useMultiFileAuthState(sessionDir);
+        /* =====================================================
+           DIRECTORY
+        ===================================================== */
 
-        let version;
+        const sessionDir =
+            process.env.SESSION_DIR || "./session";
 
-        try {
-            const latest = await fetchLatestBaileysVersion();
-            version = latest.version;
+        fs.mkdirSync(sessionDir, {
+            recursive: true
+        });
 
-            console.log(
-                chalk.gray(
-                    `• WhatsApp Web version: ${version.join(".")}`
-                )
-            );
-        } catch (err) {
-            console.log(
-                chalk.yellow(
-                    "⚠️ Gagal mengambil versi WhatsApp terbaru."
-                )
-            );
+        fs.mkdirSync("./sampah", {
+            recursive: true
+        });
 
-            // Fallback
-            version = [2, 3000, 1030600016];
-        }
+        fs.mkdirSync("./logs", {
+            recursive: true
+        });
 
-        console.log(
-            chalk.cyan("\n╔══════════════════════════════════════╗")
-        );
-        console.log(
-            chalk.cyan("║       WHATSAPP PAIRING BY DIN      ║")
-        );
-        console.log(
-            chalk.cyan("╚══════════════════════════════════════╝\n")
-        );
+        /* =====================================================
+           AUTH STATE
+        ===================================================== */
+
+        const {
+            state,
+            saveCreds
+        } = await useMultiFileAuthState(sessionDir);
+
+        /* =====================================================
+           WHATSAPP SOCKET
+        ===================================================== */
 
         const sock = makeWASocket({
-            version,
-
             auth: state,
 
             printQRInTerminal: false,
@@ -161,22 +125,17 @@ async function startBot() {
                 level: "silent"
             }),
 
-            generateHighQualityLinkPreview: true,
+            browser: Browsers.ubuntu("20.0.04"),
 
-            // Browser identifier
-            browser: [
-                "Ubuntu",
-                "Chrome",
-                "20.0.04"
-            ],
+            generateHighQualityLinkPreview: true,
 
             markOnlineOnConnect: false,
 
-            syncFullHistory: false,
-
-            getMessage: async key => {
+            getMessage: async (key) => {
                 try {
-                    if (!store) return undefined;
+                    if (!store) {
+                        return undefined;
+                    }
 
                     const msg = await store.loadMessage(
                         key.remoteJid,
@@ -189,11 +148,11 @@ async function startBot() {
                 }
             },
 
-            cachedGroupMetadata: async jid => {
+            cachedGroupMetadata: async (jid) => {
                 try {
                     if (!global.groupMetadataCache.has(jid)) {
                         const metadata =
-                            await sock.groupMetadata(jid);
+                            await sock.groupMetadata(jid).catch(() => null);
 
                         if (metadata) {
                             global.groupMetadataCache.set(
@@ -212,57 +171,81 @@ async function startBot() {
             }
         });
 
-        /*
-        ========================================================
-        CREDENTIALS
-        ========================================================
-        */
-
-        sock.ev.on("creds.update", saveCreds);
-
-        store.bind(sock.ev);
-
-        /*
-        ========================================================
-        PAIRING
-        ========================================================
-        */
+        /* =====================================================
+           PAIRING
+        ===================================================== */
 
         if (!state.creds.registered) {
-            if (!pairingNumber) {
-                pairingNumber = await getPairingNumber();
-            }
+            console.clear();
 
             console.log(
-                chalk.white(
-                    "\n⏳ Menyiapkan koneksi WhatsApp..."
+                chalk.cyan(
+                    "╔══════════════════════════════════════╗"
                 )
             );
 
-            // Beri waktu socket melakukan initialization
-            await sleep(3000);
+            console.log(
+                chalk.cyan(
+                    "║          DINSTORE WHATSAPP BOT      ║"
+                )
+            );
+
+            console.log(
+                chalk.cyan(
+                    "╚══════════════════════════════════════╝"
+                )
+            );
+
+            console.log(
+                chalk.yellow(
+                    "\nMasukkan nomor WhatsApp untuk pairing."
+                )
+            );
+
+            console.log(
+                chalk.gray(
+                    "Contoh: 6281234567890"
+                )
+            );
+
+            console.log(
+                chalk.gray(
+                    "Gunakan format negara, tanpa +, spasi atau -.\n"
+                )
+            );
+
+            const pairingNumber =
+                await getPairingNumber();
+
+            console.log(
+                chalk.yellow(
+                    "\n⏳ Meminta kode pairing..."
+                )
+            );
 
             try {
+                /*
+                 * DINSTORE
+                 *
+                 * Tidak menggunakan version manual.
+                 * Tidak menggunakan fetchLatestBaileysVersion.
+                 */
+
                 const code =
                     await sock.requestPairingCode(
                         pairingNumber
                     );
 
-                const formattedCode =
-                    String(code)
-                        .toUpperCase()
-                        .replace(/(.{4})/g, "$1-")
-                        .replace(/-$/, "");
-
                 console.log(
+                    "\n" +
                     chalk.green(
-                        "\n╔══════════════════════════════════════╗"
+                        "╔══════════════════════════════════════╗"
                     )
                 );
 
                 console.log(
                     chalk.green(
-                        `║  KODE PAIRING: ${formattedCode.padEnd(16)}║`
+                        `║     KODE PAIRING: ${code}       ║`
                     )
                 );
 
@@ -279,32 +262,26 @@ async function startBot() {
                 );
 
                 console.log(
-                    chalk.yellow(
+                    chalk.white(
                         "→ Perangkat tertaut"
                     )
                 );
 
                 console.log(
-                    chalk.yellow(
+                    chalk.white(
                         "→ Tautkan perangkat"
                     )
                 );
 
                 console.log(
-                    chalk.yellow(
+                    chalk.white(
                         "→ Tautkan dengan nomor telepon"
                     )
                 );
 
                 console.log(
-                    chalk.cyan(
-                        `\n⚠️ Masukkan kode: ${formattedCode}`
-                    )
-                );
-
-                console.log(
-                    chalk.gray(
-                        "⏳ Menunggu WhatsApp menyelesaikan pairing..."
+                    chalk.white(
+                        "→ Masukkan kode pairing di atas\n"
                     )
                 );
 
@@ -316,47 +293,83 @@ async function startBot() {
                     err?.message || err
                 );
 
-                isStarting = false;
+                console.log(
+                    chalk.yellow(
+                        "\nPastikan:"
+                    )
+                );
 
-                try {
-                    sock.ws?.close();
-                } catch {}
+                console.log(
+                    chalk.gray(
+                        "1. Nomor menggunakan format 628xxxx"
+                    )
+                );
 
-                return;
+                console.log(
+                    chalk.gray(
+                        "2. WhatsApp di HP menggunakan versi terbaru"
+                    )
+                );
+
+                console.log(
+                    chalk.gray(
+                        "3. Nomor belum terlalu banyak perangkat tertaut"
+                    )
+                );
+
+                process.exit(1);
             }
         }
 
-        /*
-        ========================================================
-        CONNECTION UPDATE
-        ========================================================
-        */
+        /* =====================================================
+           SAVE CREDENTIALS
+        ===================================================== */
+
+        sock.ev.on(
+            "creds.update",
+            saveCreds
+        );
+
+        /* =====================================================
+           STORE
+        ===================================================== */
+
+        if (store) {
+            store.bind(sock.ev);
+        }
+
+        /* =====================================================
+           CONNECTION UPDATE
+        ===================================================== */
 
         sock.ev.on(
             "connection.update",
-            async update => {
-                const {
-                    connection,
-                    lastDisconnect
-                } = update;
+            async ({
+                connection,
+                lastDisconnect
+            }) => {
 
                 if (connection === "connecting") {
                     console.log(
-                        chalk.gray(
-                            "🔄 Menghubungkan ke WhatsApp..."
+                        chalk.yellow(
+                            "⏳ Menghubungkan ke WhatsApp..."
                         )
                     );
                 }
 
                 if (connection === "open") {
-                    isStarting = false;
 
-                    const userId =
-                        sock?.user?.id || "";
+                    try {
+                        const jid =
+                            sock.user?.id || "";
 
-                    global.botNumber =
-                        userId.split(":")[0] +
-                        "@s.whatsapp.net";
+                        global.botNumber =
+                            jid.split(":")[0] +
+                            "@s.whatsapp.net";
+
+                    } catch {
+                        global.botNumber = "";
+                    }
 
                     console.log(
                         chalk.green(
@@ -366,7 +379,7 @@ async function startBot() {
 
                     console.log(
                         chalk.green(
-                            "║       WHATSAPP BERHASIL TERHUBUNG    ║"
+                            "║       DINSTORE BERHASIL ONLINE       ║"
                         )
                     );
 
@@ -379,7 +392,7 @@ async function startBot() {
                     console.log(
                         chalk.white(
                             `\n• Nama     : ${
-                                sock?.user?.name ||
+                                sock.user?.name ||
                                 "Tidak terdeteksi"
                             }`
                         )
@@ -388,29 +401,33 @@ async function startBot() {
                     console.log(
                         chalk.white(
                             `• WhatsApp : ${
-                                global.botNumber.split("@")[0]
+                                global.botNumber
+                                    ? global.botNumber.split("@")[0]
+                                    : "Tidak terdeteksi"
                             }`
                         )
                     );
 
                     console.log(
                         chalk.green(
-                            "\n✅ NDZ BOT ONLINE\n"
+                            "\n✓ DINSTORE siap digunakan.\n"
                         )
                     );
-
-                    // Setelah berhasil login,
-                    // nomor tidak perlu diminta lagi.
-                    pairingNumber = null;
                 }
 
                 if (connection === "close") {
-                    isStarting = false;
 
-                    const reason =
-                        getDisconnectReason(
+                    let reason;
+
+                    try {
+                        reason =
                             lastDisconnect
-                        );
+                                ?.error
+                                ?.output
+                                ?.statusCode;
+                    } catch {
+                        reason = undefined;
+                    }
 
                     console.log(
                         chalk.red(
@@ -418,102 +435,75 @@ async function startBot() {
                         )
                     );
 
-                    console.log(
-                        chalk.gray(
-                            `• Disconnect reason: ${
-                                reason || "unknown"
-                            }`
-                        )
-                    );
-
                     if (
                         reason ===
                         DisconnectReason.loggedOut
                     ) {
+
                         console.log(
                             chalk.red(
-                                "\n❌ Session logout."
+                                "❌ Session logout."
                             )
                         );
 
                         console.log(
                             chalk.yellow(
-                                "Hapus folder session kemudian jalankan bot kembali."
+                                "Hapus folder session lalu jalankan kembali."
                             )
                         );
-
-                        pairingNumber = null;
 
                         return;
                     }
 
                     if (
                         reason ===
-                        DisconnectReason.forbidden
+                        DisconnectReason.connectionReplaced
                     ) {
+
                         console.log(
                             chalk.red(
-                                "\n❌ WhatsApp menolak koneksi."
-                            )
-                        );
-
-                        console.log(
-                            chalk.yellow(
-                                "Coba pairing kembali setelah beberapa saat."
-                            )
-                        );
-                    }
-
-                    if (
-                        reason ===
-                        DisconnectReason.badSession
-                    ) {
-                        console.log(
-                            chalk.red(
-                                "\n❌ Session rusak."
-                            )
-                        );
-
-                        console.log(
-                            chalk.yellow(
-                                "Hapus folder session untuk pairing ulang."
+                                "❌ Session digantikan oleh perangkat lain."
                             )
                         );
 
                         return;
                     }
 
-                    if (!reconnectTimer) {
-                        reconnectTimer =
-                            setTimeout(() => {
-                                reconnectTimer = null;
+                    console.log(
+                        chalk.yellow(
+                            "🔄 Menghubungkan kembali..."
+                        )
+                    );
 
-                                console.log(
-                                    chalk.cyan(
-                                        "\n🔄 Menghubungkan kembali..."
-                                    )
-                                );
-
-                                startBot();
-                            }, 5000);
-                    }
+                    setTimeout(() => {
+                        startBot();
+                    }, 5000);
                 }
             }
         );
 
-        /*
-        ========================================================
-        MESSAGES
-        ========================================================
-        */
+        /* =====================================================
+           MESSAGES
+        ===================================================== */
 
         sock.ev.on(
             "messages.upsert",
-            async ({ messages }) => {
-                try {
-                    const msg = messages?.[0];
+            async ({
+                messages
+            }) => {
 
-                    if (!msg?.message) return;
+                try {
+
+                    const msg =
+                        messages?.[0];
+
+                    if (!msg) {
+                        return;
+                    }
+
+                    if (!msg.message) {
+                        return;
+                    }
 
                     const m =
                         await serialize(
@@ -521,14 +511,20 @@ async function startBot() {
                             msg
                         );
 
+                    /*
+                     * File handler utama bot.
+                     */
+
                     require("./message.js")(
                         sock,
                         m
                     );
+
                 } catch (err) {
+
                     console.error(
                         chalk.red(
-                            "❌ Message handler error:"
+                            "Message Error:"
                         ),
                         err
                     );
@@ -536,16 +532,16 @@ async function startBot() {
             }
         );
 
-        /*
-        ========================================================
-        GROUP PARTICIPANTS
-        ========================================================
-        */
+        /* =====================================================
+           GROUP PARTICIPANTS
+        ===================================================== */
 
         sock.ev.on(
             "group-participants.update",
-            async update => {
+            async (update) => {
+
                 try {
+
                     const {
                         id,
                         author,
@@ -554,27 +550,55 @@ async function startBot() {
                     } = update;
 
                     const groupMetadata =
-                        await sock.groupMetadata(
-                            id
-                        );
+                        await sock
+                            .groupMetadata(id)
+                            .catch(() => null);
+
+                    if (!groupMetadata) {
+                        return;
+                    }
 
                     global.groupMetadataCache.set(
                         id,
                         groupMetadata
                     );
 
+                    /* =========================================
+                       DATABASE
+                    ========================================= */
+
                     let botSettings = {};
 
                     try {
-                        botSettings =
-                            JSON.parse(
-                                fs.readFileSync(
-                                    "./collection/database.json",
-                                    "utf8"
-                                )
-                            );
-                    } catch {
-                        botSettings = {};
+
+                        const databasePath =
+                            "./collection/database.json";
+
+                        if (
+                            fs.existsSync(
+                                databasePath
+                            )
+                        ) {
+
+                            botSettings =
+                                JSON.parse(
+                                    fs.readFileSync(
+                                        databasePath,
+                                        "utf8"
+                                    )
+                                );
+                        }
+
+                    } catch (err) {
+
+                        console.log(
+                            chalk.red(
+                                "Database error:"
+                            ),
+                            err
+                        );
+
+                        return;
                     }
 
                     if (!botSettings.welcome) {
@@ -582,59 +606,66 @@ async function startBot() {
                     }
 
                     const groupSubject =
-                        groupMetadata.subject;
+                        groupMetadata.subject ||
+                        "grup";
 
                     const commonMessageSuffix =
-                        `\n\n📢 Jangan lupa join grup :\n${
-                            global.linkgroup || ""
-                        }`;
+                        global.linkgroup
+                            ? `\n\n📢 Jangan lupa join grup :\n${global.linkgroup}`
+                            : "";
 
                     for (
-                        const participant of participants
+                        const participant
+                        of participants
                     ) {
-                        let messageText = "";
 
                         const authorName =
                             author
                                 ? author.split("@")[0]
                                 : "";
 
-                        const participantId =
+                        const participantName =
                             typeof participant ===
                             "string"
-                                ? participant
-                                : participant?.id;
+                                ? participant.split("@")[0]
+                                : participant?.id
+                                    ?.split("@")[0] ||
+                                  "";
 
-                        const participantName =
-                            participantId
-                                ? participantId.split(
-                                      "@"
-                                  )[0]
-                                : "";
+                        let messageText = "";
 
                         switch (action) {
+
                             case "add":
+
                                 messageText =
                                     !author
                                         ? `@${participantName} Selamat datang di grup ${groupSubject}`
                                         : `@${authorName} Telah *menambahkan* @${participantName} ke dalam grup.`;
+
                                 break;
 
                             case "remove":
+
                                 messageText =
                                     !author
                                         ? `@${participantName} Telah *keluar* dari grup.`
                                         : `@${authorName} Telah *mengeluarkan* @${participantName} dari grup.`;
+
                                 break;
 
                             case "promote":
+
                                 messageText =
                                     `@${authorName} Telah *menjadikan* @${participantName} sebagai *admin* grup.`;
+
                                 break;
 
                             case "demote":
+
                                 messageText =
                                     `@${authorName} Telah *menghentikan* @${participantName} sebagai *admin* grup.`;
+
                                 break;
 
                             default:
@@ -644,19 +675,29 @@ async function startBot() {
                         messageText +=
                             commonMessageSuffix;
 
-                        const mentions = [];
-
-                        if (author) {
-                            mentions.push(author);
-                        }
-
-                        if (participantId) {
-                            mentions.push(
-                                participantId
-                            );
-                        }
-
                         try {
+
+                            const mentions = [];
+
+                            if (author) {
+                                mentions.push(author);
+                            }
+
+                            if (
+                                typeof participant ===
+                                "string"
+                            ) {
+                                mentions.push(
+                                    participant
+                                );
+                            } else if (
+                                participant?.id
+                            ) {
+                                mentions.push(
+                                    participant.id
+                                );
+                            }
+
                             await sock.sendMessage(
                                 id,
                                 {
@@ -664,34 +705,50 @@ async function startBot() {
                                     mentions
                                 }
                             );
-                        } catch (err) {
+
+                        } catch (error) {
+
                             console.log(
-                                "Welcome message error:",
-                                err?.message || err
+                                chalk.red(
+                                    "Welcome message error:"
+                                ),
+                                error
                             );
                         }
                     }
+
                 } catch (err) {
+
                     console.log(
-                        "Group participant error:",
-                        err?.message || err
+                        chalk.red(
+                            "Group participant error:"
+                        ),
+                        err
                     );
                 }
             }
         );
 
-        /*
-        ========================================================
-        HELPER
-        ========================================================
-        */
+        /* =====================================================
+           LID
+        ===================================================== */
 
-        sock.toLid = async pn => pn;
+        sock.toLid = async (pn) => {
+            return pn;
+        };
 
-        sock.decodeJid = jid => {
-            if (!jid) return jid;
+        /* =====================================================
+           DECODE JID
+        ===================================================== */
+
+        sock.decodeJid = (jid) => {
+
+            if (!jid) {
+                return jid;
+            }
 
             if (/:\\d+@/gi.test(jid)) {
+
                 const decode =
                     jidDecode(jid) || {};
 
@@ -699,99 +756,39 @@ async function startBot() {
                     decode.user &&
                     decode.server
                 ) {
-                    return `${decode.user}@${decode.server}`;
-                }
 
-                return jid;
+                    return (
+                        `${decode.user}@${decode.server}`
+                    );
+                }
             }
 
             return jid;
         };
 
-        sock.downloadMediaMessage =
-            async (
-                m,
-                type,
-                filename = ""
-            ) => {
-                try {
-                    if (
-                        !m ||
-                        !(m.url ||
-                            m.directPath)
-                    ) {
-                        return Buffer.alloc(0);
-                    }
+        /* =====================================================
+           DOWNLOAD MEDIA
+        ===================================================== */
 
-                    const stream =
-                        await downloadContentFromMessage(
-                            m,
-                            type
-                        );
+        sock.downloadMediaMessage = async (
+            m,
+            type,
+            filename = ""
+        ) => {
 
-                    let buffer =
-                        Buffer.alloc(0);
+            try {
 
-                    for await (
-                        const chunk of stream
-                    ) {
-                        buffer = Buffer.concat([
-                            buffer,
-                            chunk
-                        ]);
-                    }
-
-                    if (filename) {
-                        await fs.promises.writeFile(
-                            filename,
-                            buffer
-                        );
-                    }
-
-                    return filename &&
-                        fs.existsSync(filename)
-                        ? filename
-                        : buffer;
-                } catch (err) {
-                    console.log(
-                        "Download media error:",
-                        err?.message || err
-                    );
-
+                if (
+                    !m ||
+                    !(m.url || m.directPath)
+                ) {
                     return Buffer.alloc(0);
                 }
-            };
-
-        sock.downloadAndSaveMediaMessage =
-            async (
-                message,
-                filename,
-                attachExtension = true
-            ) => {
-                const quoted =
-                    message.msg
-                        ? message.msg
-                        : message;
-
-                const mime =
-                    (message.msg ||
-                        message)
-                        .mimetype || "";
-
-                const messageType =
-                    message.mtype
-                        ? message.mtype.replace(
-                              /Message/gi,
-                              ""
-                          )
-                        : mime.split("/")[0];
-
-                const fil = Date.now();
 
                 const stream =
                     await downloadContentFromMessage(
-                        quoted,
-                        messageType
+                        m,
+                        type
                     );
 
                 let buffer =
@@ -800,79 +797,143 @@ async function startBot() {
                 for await (
                     const chunk of stream
                 ) {
-                    buffer = Buffer.concat([
-                        buffer,
-                        chunk
-                    ]);
+
+                    buffer =
+                        Buffer.concat([
+                            buffer,
+                            chunk
+                        ]);
                 }
 
-                const type =
-                    await FileType.fromBuffer(
+                if (filename) {
+
+                    await fs.promises.writeFile(
+                        filename,
+                        buffer
+                    );
+                }
+
+                return filename &&
+                    fs.existsSync(filename)
+                    ? filename
+                    : buffer;
+
+            } catch (err) {
+
+                console.error(
+                    "Download media error:",
+                    err
+                );
+
+                return Buffer.alloc(0);
+            }
+        };
+
+        /* =====================================================
+           DOWNLOAD AND SAVE MEDIA
+        ===================================================== */
+
+        sock.downloadAndSaveMediaMessage =
+            async (
+                message,
+                filename,
+                attachExtension = true
+            ) => {
+
+                try {
+
+                    const quoted =
+                        message.msg
+                            ? message.msg
+                            : message;
+
+                    const mime =
+                        (
+                            message.msg ||
+                            message
+                        ).mimetype || "";
+
+                    const messageType =
+                        message.mtype
+                            ? message.mtype.replace(
+                                /Message/gi,
+                                ""
+                            )
+                            : mime.split("/")[0];
+
+                    const fil =
+                        Date.now();
+
+                    const stream =
+                        await downloadContentFromMessage(
+                            quoted,
+                            messageType
+                        );
+
+                    let buffer =
+                        Buffer.alloc(0);
+
+                    for await (
+                        const chunk of stream
+                    ) {
+
+                        buffer =
+                            Buffer.concat([
+                                buffer,
+                                chunk
+                            ]);
+                    }
+
+                    const type =
+                        await FileType.fromBuffer(
+                            buffer
+                        );
+
+                    const ext =
+                        type?.ext || "bin";
+
+                    const trueFileName =
+                        attachExtension
+                            ? `./sampah/${fil}.${ext}`
+                            : filename;
+
+                    fs.writeFileSync(
+                        trueFileName,
                         buffer
                     );
 
-                const ext =
-                    type?.ext || "bin";
+                    return trueFileName;
 
-                const trueFileName =
-                    attachExtension
-                        ? `./sampah/${fil}.${ext}`
-                        : filename;
+                } catch (err) {
 
-                fs.writeFileSync(
-                    trueFileName,
-                    buffer
-                );
+                    console.error(
+                        "Save media error:",
+                        err
+                    );
 
-                return trueFileName;
+                    return null;
+                }
             };
 
         return sock;
+
     } catch (err) {
-        isStarting = false;
 
         console.error(
             chalk.red(
-                "\n❌ Gagal menjalankan bot:"
-            )
+                "\n❌ Fatal Bot Error:"
+            ),
+            err
         );
 
-        console.error(
-            err?.stack || err
-        );
-
-        if (!reconnectTimer) {
-            reconnectTimer =
-                setTimeout(() => {
-                    reconnectTimer = null;
-                    startBot();
-                }, 5000);
-        }
+        setTimeout(() => {
+            startBot();
+        }, 5000);
     }
 }
 
-process.on(
-    "uncaughtException",
-    err => {
-        console.error(
-            chalk.red(
-                "❌ Uncaught Exception:"
-            ),
-            err
-        );
-    }
-);
-
-process.on(
-    "unhandledRejection",
-    err => {
-        console.error(
-            chalk.red(
-                "❌ Unhandled Rejection:"
-            ),
-            err
-        );
-    }
-);
+/* =========================================================
+   START DINSTORE
+========================================================= */
 
 startBot();
