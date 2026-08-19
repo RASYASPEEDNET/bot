@@ -9,7 +9,6 @@
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
-
     "pm2": "pm2 start ecosystem.config.cjs",
     "stop": "pm2 stop ndz-bot",
     "restart": "pm2 restart ndz-bot",
@@ -21,22 +20,21 @@
   },
 
   "dependencies": {
-    "@hapi/boom": "^10.0.0",
+    "@hapi/boom": "10.0.0",
     "@itsukichan/baileys": "latest",
-    "baileys": "npm:@yudzxml/baileys@latest",
-
-    "axios": "^0.24.0",
-    "chalk": "^4.1.2",
-    "cheerio": "^1.0.0",
-    "dotenv": "^16.6.1",
-    "file-type": "^16.5.3",
-    "form-data": "^4.0.0",
-    "jimp": "^1.6.1",
-    "moment-timezone": "^0.5.34",
-    "node-upload-images": "^1.0.1",
-    "pino": "^9.5.0",
-    "ssh2": "^1.17.0",
-    "util": "^0.12.5",
-    "wa-sticker-formatter": "^4.4.4"
+    "axios": "1.11.0",
+    "baileys": "npm:@yudzxml/baileys@7.4.3",
+    "chalk": "4.1.2",
+    "cheerio": "1.0.0",
+    "dotenv": "16.6.1",
+    "file-type": "16.5.3",
+    "form-data": "4.0.0",
+    "jimp": "1.6.1",
+    "moment-timezone": "0.5.48",
+    "node-fetch": "3.3.2",
+    "node-upload-images": "1.0.1",
+    "pino": "9.5.0",
+    "ssh2": "1.17.0",
+    "wa-sticker-formatter": "4.4.4"
   }
 }
