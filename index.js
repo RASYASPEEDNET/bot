@@ -6,10 +6,10 @@ const {
     default: makeWASocket,
     useMultiFileAuthState,
     DisconnectReason,
+    fetchLatestBaileysVersion,
     downloadContentFromMessage,
     jidDecode,
-    makeInMemoryStore,
-    Browsers
+    makeInMemoryStore
 } = require("baileys");
 
 const readline = require("readline");
@@ -21,12 +21,13 @@ const FileType = require("file-type");
 
 global.groupMetadataCache = new Map();
 global.botNumber = "";
+global.pairingNumber = "";
 
 /* =========================================================
    ASK INPUT
 ========================================================= */
 
-async function ask(question) {
+function ask(question) {
     const rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout
@@ -41,29 +42,43 @@ async function ask(question) {
 }
 
 /* =========================================================
-   PAIRING NUMBER
+   GET PAIRING NUMBER
 ========================================================= */
 
 async function getPairingNumber() {
+
     while (true) {
+
         let number = await ask(
             "\n📱 Masukkan nomor WhatsApp untuk pairing\n" +
             "Contoh: 6281234567890\n" +
             "Nomor WhatsApp: "
         );
 
-        // Hapus semua karakter selain angka
         number = number.replace(/\D/g, "");
 
         if (number.length >= 10) {
+
+            global.pairingNumber = number;
+
             return number;
         }
 
         console.log(
             chalk.red(
-                "❌ Nomor tidak valid.\n" +
-                "Gunakan format internasional tanpa +, spasi atau -.\n" +
-                "Contoh: 6281234567890"
+                "\n❌ Nomor tidak valid."
+            )
+        );
+
+        console.log(
+            chalk.yellow(
+                "Gunakan format internasional."
+            )
+        );
+
+        console.log(
+            chalk.gray(
+                "Contoh: 6281234567890\n"
             )
         );
     }
@@ -74,252 +89,202 @@ async function getPairingNumber() {
 ========================================================= */
 
 async function startBot() {
+
     try {
-        const store = makeInMemoryStore({
-            logger: pino({
-                level: "silent"
-            }).child({
-                level: "silent",
-                stream: "store"
-            })
-        });
 
         /* =====================================================
-           DIRECTORY
+           FOLDER
         ===================================================== */
 
         const sessionDir =
-            process.env.SESSION_DIR || "./session";
+            process.env.SESSION_DIR ||
+            "./session";
 
-        fs.mkdirSync(sessionDir, {
-            recursive: true
-        });
+        fs.mkdirSync(
+            sessionDir,
+            {
+                recursive: true
+            }
+        );
 
-        fs.mkdirSync("./sampah", {
-            recursive: true
-        });
+        fs.mkdirSync(
+            "./sampah",
+            {
+                recursive: true
+            }
+        );
 
-        fs.mkdirSync("./logs", {
-            recursive: true
-        });
+        fs.mkdirSync(
+            "./logs",
+            {
+                recursive: true
+            }
+        );
 
         /* =====================================================
-           AUTH STATE
+           STORE
+        ===================================================== */
+
+        const store =
+            makeInMemoryStore({
+                logger: pino({
+                    level: "silent"
+                }).child({
+                    level: "silent",
+                    stream: "store"
+                })
+            });
+
+        /* =====================================================
+           AUTH
         ===================================================== */
 
         const {
             state,
             saveCreds
-        } = await useMultiFileAuthState(sessionDir);
+        } = await useMultiFileAuthState(
+            sessionDir
+        );
 
         /* =====================================================
-           WHATSAPP SOCKET
+           BAILEYS VERSION
         ===================================================== */
 
-        const sock = makeWASocket({
-            auth: state,
+        const {
+            version
+        } =
+            await fetchLatestBaileysVersion();
 
-            printQRInTerminal: false,
+        /* =====================================================
+           HEADER
+        ===================================================== */
 
-            logger: pino({
-                level: "silent"
-            }),
+        console.log(
+            chalk.cyan(
+                "\n╔══════════════════════════════════════╗"
+            )
+        );
 
-            browser: Browsers.ubuntu("20.0.04"),
+        console.log(
+            chalk.cyan(
+                "║          DINSTORE WHATSAPP BOT      ║"
+            )
+        );
 
-            generateHighQualityLinkPreview: true,
+        console.log(
+            chalk.cyan(
+                "╚══════════════════════════════════════╝"
+            )
+        );
 
-            markOnlineOnConnect: false,
+        console.log(
+            chalk.gray(
+                `\n• Browser : Ubuntu / Chrome / 20.0.04`
+            )
+        );
 
-            getMessage: async (key) => {
-                try {
-                    if (!store) {
-                        return undefined;
-                    }
+        console.log(
+            chalk.gray(
+                `• Session : ${sessionDir}`
+            )
+        );
 
-                    const msg = await store.loadMessage(
-                        key.remoteJid,
-                        key.id
-                    );
+        /* =====================================================
+           SOCKET
+        ===================================================== */
 
-                    return msg?.message || undefined;
-                } catch {
-                    return undefined;
-                }
-            },
+        const sock =
+            makeWASocket({
 
-            cachedGroupMetadata: async (jid) => {
-                try {
-                    if (!global.groupMetadataCache.has(jid)) {
-                        const metadata =
-                            await sock.groupMetadata(jid).catch(() => null);
+                version,
 
-                        if (metadata) {
-                            global.groupMetadataCache.set(
-                                jid,
-                                metadata
-                            );
+                auth: state,
+
+                printQRInTerminal: false,
+
+                logger: pino({
+                    level: "silent"
+                }),
+
+                generateHighQualityLinkPreview:
+                    true,
+
+                browser: [
+                    "Ubuntu",
+                    "Chrome",
+                    "20.0.04"
+                ],
+
+                getMessage: async (
+                    key
+                ) => {
+
+                    try {
+
+                        if (!store) {
+                            return undefined;
                         }
 
-                        return metadata;
+                        const msg =
+                            await store.loadMessage(
+                                key.remoteJid,
+                                key.id
+                            );
+
+                        return (
+                            msg?.message ||
+                            undefined
+                        );
+
+                    } catch {
+
+                        return undefined;
                     }
+                },
 
-                    return global.groupMetadataCache.get(jid);
-                } catch {
-                    return undefined;
-                }
-            }
-        });
+                cachedGroupMetadata:
+                    async (
+                        jid
+                    ) => {
 
-        /* =====================================================
-           PAIRING
-        ===================================================== */
+                        try {
 
-        if (!state.creds.registered) {
-            console.clear();
+                            if (
+                                !global.groupMetadataCache.has(
+                                    jid
+                                )
+                            ) {
 
-            console.log(
-                chalk.cyan(
-                    "╔══════════════════════════════════════╗"
-                )
-            );
+                                const metadata =
+                                    await sock
+                                        .groupMetadata(
+                                            jid
+                                        )
+                                        .catch(
+                                            () => null
+                                        );
 
-            console.log(
-                chalk.cyan(
-                    "║          DINSTORE WHATSAPP BOT      ║"
-                )
-            );
+                                if (metadata) {
 
-            console.log(
-                chalk.cyan(
-                    "╚══════════════════════════════════════╝"
-                )
-            );
+                                    global.groupMetadataCache.set(
+                                        jid,
+                                        metadata
+                                    );
+                                }
 
-            console.log(
-                chalk.yellow(
-                    "\nMasukkan nomor WhatsApp untuk pairing."
-                )
-            );
+                                return metadata;
+                            }
 
-            console.log(
-                chalk.gray(
-                    "Contoh: 6281234567890"
-                )
-            );
+                            return global.groupMetadataCache.get(
+                                jid
+                            );
 
-            console.log(
-                chalk.gray(
-                    "Gunakan format negara, tanpa +, spasi atau -.\n"
-                )
-            );
+                        } catch {
 
-            const pairingNumber =
-                await getPairingNumber();
-
-            console.log(
-                chalk.yellow(
-                    "\n⏳ Meminta kode pairing..."
-                )
-            );
-
-            try {
-                /*
-                 * DINSTORE
-                 *
-                 * Tidak menggunakan version manual.
-                 * Tidak menggunakan fetchLatestBaileysVersion.
-                 */
-
-                const code =
-                    await sock.requestPairingCode(
-                        pairingNumber
-                    );
-
-                console.log(
-                    "\n" +
-                    chalk.green(
-                        "╔══════════════════════════════════════╗"
-                    )
-                );
-
-                console.log(
-                    chalk.green(
-                        `║     KODE PAIRING: ${code}       ║`
-                    )
-                );
-
-                console.log(
-                    chalk.green(
-                        "╚══════════════════════════════════════╝"
-                    )
-                );
-
-                console.log(
-                    chalk.yellow(
-                        "\n📱 Buka WhatsApp"
-                    )
-                );
-
-                console.log(
-                    chalk.white(
-                        "→ Perangkat tertaut"
-                    )
-                );
-
-                console.log(
-                    chalk.white(
-                        "→ Tautkan perangkat"
-                    )
-                );
-
-                console.log(
-                    chalk.white(
-                        "→ Tautkan dengan nomor telepon"
-                    )
-                );
-
-                console.log(
-                    chalk.white(
-                        "→ Masukkan kode pairing di atas\n"
-                    )
-                );
-
-            } catch (err) {
-                console.error(
-                    chalk.red(
-                        "\n❌ Gagal meminta kode pairing:"
-                    ),
-                    err?.message || err
-                );
-
-                console.log(
-                    chalk.yellow(
-                        "\nPastikan:"
-                    )
-                );
-
-                console.log(
-                    chalk.gray(
-                        "1. Nomor menggunakan format 628xxxx"
-                    )
-                );
-
-                console.log(
-                    chalk.gray(
-                        "2. WhatsApp di HP menggunakan versi terbaru"
-                    )
-                );
-
-                console.log(
-                    chalk.gray(
-                        "3. Nomor belum terlalu banyak perangkat tertaut"
-                    )
-                );
-
-                process.exit(1);
-            }
-        }
+                            return undefined;
+                        }
+                    }
+            });
 
         /* =====================================================
            SAVE CREDENTIALS
@@ -334,8 +299,107 @@ async function startBot() {
            STORE
         ===================================================== */
 
-        if (store) {
-            store.bind(sock.ev);
+        store?.bind(
+            sock.ev
+        );
+
+        /* =====================================================
+           PAIRING
+        ===================================================== */
+
+        if (
+            !sock.authState.creds.registered
+        ) {
+
+            const number =
+                await getPairingNumber();
+
+            console.log(
+                chalk.white(
+                    "\n• Script By DINSTORE"
+                )
+            );
+
+            console.log(
+                chalk.white(
+                    "• Pembuat t.me/DINN_STORE"
+                )
+            );
+
+            console.log(
+                chalk.white(
+                    "• Meminta Code Pair..."
+                )
+            );
+
+            try {
+
+                /*
+                 * Beri sedikit waktu agar
+                 * socket siap sebelum pairing.
+                 */
+
+                await new Promise(
+                    resolve =>
+                        setTimeout(
+                            resolve,
+                            3000
+                        )
+                );
+
+                const code =
+                    await sock.requestPairingCode(
+                        number,
+                        "DINSTORE"
+                    );
+
+                console.log(
+                    chalk.green(
+                        `\n• Kode Pairing: ${code}`
+                    )
+                );
+
+                console.log(
+                    chalk.white(
+                        "\n• WhatsApp → Perangkat tertaut"
+                    )
+                );
+
+                console.log(
+                    chalk.white(
+                        "• Tautkan perangkat"
+                    )
+                );
+
+                console.log(
+                    chalk.white(
+                        "• Tautkan dengan nomor telepon"
+                    )
+                );
+
+                console.log(
+                    chalk.white(
+                        "• Masukkan kode pairing di atas\n"
+                    )
+                );
+
+            } catch (err) {
+
+                console.log(
+                    chalk.red(
+                        "\n❌ Gagal meminta Code Pairing"
+                    )
+                );
+
+                console.log(
+                    chalk.red(
+                        err?.message ||
+                        err
+                    )
+                );
+
+                return;
+            }
         }
 
         /* =====================================================
@@ -344,12 +408,18 @@ async function startBot() {
 
         sock.ev.on(
             "connection.update",
-            async ({
+            ({
                 connection,
                 lastDisconnect
             }) => {
 
-                if (connection === "connecting") {
+                /* CONNECTING */
+
+                if (
+                    connection ===
+                    "connecting"
+                ) {
+
                     console.log(
                         chalk.yellow(
                             "⏳ Menghubungkan ke WhatsApp..."
@@ -357,18 +427,24 @@ async function startBot() {
                     );
                 }
 
-                if (connection === "open") {
+                /* OPEN */
+
+                if (
+                    connection ===
+                    "open"
+                ) {
 
                     try {
-                        const jid =
-                            sock.user?.id || "";
 
                         global.botNumber =
-                            jid.split(":")[0] +
+                            sock.user?.id
+                                ?.split(":")[0] +
                             "@s.whatsapp.net";
 
                     } catch {
-                        global.botNumber = "";
+
+                        global.botNumber =
+                            "";
                     }
 
                     console.log(
@@ -402,7 +478,9 @@ async function startBot() {
                         chalk.white(
                             `• WhatsApp : ${
                                 global.botNumber
-                                    ? global.botNumber.split("@")[0]
+                                    ? global.botNumber.split(
+                                        "@"
+                                    )[0]
                                     : "Tidak terdeteksi"
                             }`
                         )
@@ -415,25 +493,37 @@ async function startBot() {
                     );
                 }
 
-                if (connection === "close") {
+                /* CLOSE */
 
-                    let reason;
+                if (
+                    connection ===
+                    "close"
+                ) {
 
-                    try {
-                        reason =
-                            lastDisconnect
-                                ?.error
-                                ?.output
-                                ?.statusCode;
-                    } catch {
-                        reason = undefined;
-                    }
+                    const reason =
+                        lastDisconnect
+                            ?.error
+                            ?.output
+                            ?.statusCode;
 
                     console.log(
                         chalk.red(
-                            "\n⚠️ Koneksi WhatsApp terputus."
+                            "\n❌ Koneksi WhatsApp terputus."
                         )
                     );
+
+                    console.log(
+                        chalk.yellow(
+                            `• Disconnect Reason: ${
+                                reason ||
+                                "UNKNOWN"
+                            }`
+                        )
+                    );
+
+                    /* =========================================
+                       LOGGED OUT
+                    ========================================= */
 
                     if (
                         reason ===
@@ -442,18 +532,22 @@ async function startBot() {
 
                         console.log(
                             chalk.red(
-                                "❌ Session logout."
+                                "\n❌ Device Logged Out."
                             )
                         );
 
                         console.log(
                             chalk.yellow(
-                                "Hapus folder session lalu jalankan kembali."
+                                "Hapus folder session untuk pairing ulang."
                             )
                         );
 
                         return;
                     }
+
+                    /* =========================================
+                       CONNECTION REPLACED
+                    ========================================= */
 
                     if (
                         reason ===
@@ -462,28 +556,59 @@ async function startBot() {
 
                         console.log(
                             chalk.red(
-                                "❌ Session digantikan oleh perangkat lain."
+                                "\n❌ Session digunakan perangkat lain."
                             )
                         );
 
                         return;
                     }
 
+                    /* =========================================
+                       BAD SESSION
+                    ========================================= */
+
+                    if (
+                        reason ===
+                        DisconnectReason.badSession
+                    ) {
+
+                        console.log(
+                            chalk.red(
+                                "\n❌ Session rusak."
+                            )
+                        );
+
+                        console.log(
+                            chalk.yellow(
+                                "Hapus folder session lalu pairing ulang."
+                            )
+                        );
+
+                        return;
+                    }
+
+                    /* =========================================
+                       RECONNECT
+                    ========================================= */
+
                     console.log(
                         chalk.yellow(
-                            "🔄 Menghubungkan kembali..."
+                            "\n🔄 Reconnecting dalam 5 detik..."
                         )
                     );
 
-                    setTimeout(() => {
-                        startBot();
-                    }, 5000);
+                    setTimeout(
+                        () => {
+                            startBot();
+                        },
+                        5000
+                    );
                 }
             }
         );
 
         /* =====================================================
-           MESSAGES
+           MESSAGE
         ===================================================== */
 
         sock.ev.on(
@@ -497,11 +622,10 @@ async function startBot() {
                     const msg =
                         messages?.[0];
 
-                    if (!msg) {
-                        return;
-                    }
-
-                    if (!msg.message) {
+                    if (
+                        !msg ||
+                        !msg.message
+                    ) {
                         return;
                     }
 
@@ -511,18 +635,16 @@ async function startBot() {
                             msg
                         );
 
-                    /*
-                     * File handler utama bot.
-                     */
-
-                    require("./message.js")(
+                    require(
+                        "./message.js"
+                    )(
                         sock,
                         m
                     );
 
                 } catch (err) {
 
-                    console.error(
+                    console.log(
                         chalk.red(
                             "Message Error:"
                         ),
@@ -538,7 +660,9 @@ async function startBot() {
 
         sock.ev.on(
             "group-participants.update",
-            async (update) => {
+            async (
+                update
+            ) => {
 
                 try {
 
@@ -551,8 +675,12 @@ async function startBot() {
 
                     const groupMetadata =
                         await sock
-                            .groupMetadata(id)
-                            .catch(() => null);
+                            .groupMetadata(
+                                id
+                            )
+                            .catch(
+                                () => null
+                            );
 
                     if (!groupMetadata) {
                         return;
@@ -571,19 +699,19 @@ async function startBot() {
 
                     try {
 
-                        const databasePath =
+                        const dbPath =
                             "./collection/database.json";
 
                         if (
                             fs.existsSync(
-                                databasePath
+                                dbPath
                             )
                         ) {
 
                             botSettings =
                                 JSON.parse(
                                     fs.readFileSync(
-                                        databasePath,
+                                        dbPath,
                                         "utf8"
                                     )
                                 );
@@ -593,7 +721,7 @@ async function startBot() {
 
                         console.log(
                             chalk.red(
-                                "Database error:"
+                                "Database Error:"
                             ),
                             err
                         );
@@ -601,7 +729,9 @@ async function startBot() {
                         return;
                     }
 
-                    if (!botSettings.welcome) {
+                    if (
+                        !botSettings.welcome
+                    ) {
                         return;
                     }
 
@@ -609,7 +739,7 @@ async function startBot() {
                         groupMetadata.subject ||
                         "grup";
 
-                    const commonMessageSuffix =
+                    const suffix =
                         global.linkgroup
                             ? `\n\n📢 Jangan lupa join grup :\n${global.linkgroup}`
                             : "";
@@ -621,20 +751,30 @@ async function startBot() {
 
                         const authorName =
                             author
-                                ? author.split("@")[0]
+                                ? author.split(
+                                    "@"
+                                )[0]
                                 : "";
 
-                        const participantName =
+                        const participantId =
                             typeof participant ===
                             "string"
-                                ? participant.split("@")[0]
-                                : participant?.id
-                                    ?.split("@")[0] ||
-                                  "";
+                                ? participant
+                                : participant?.id;
 
-                        let messageText = "";
+                        const participantName =
+                            participantId
+                                ? participantId.split(
+                                    "@"
+                                )[0]
+                                : "";
 
-                        switch (action) {
+                        let messageText =
+                            "";
+
+                        switch (
+                            action
+                        ) {
 
                             case "add":
 
@@ -669,59 +809,62 @@ async function startBot() {
                                 break;
 
                             default:
+
                                 continue;
                         }
 
                         messageText +=
-                            commonMessageSuffix;
+                            suffix;
+
+                        const mentions =
+                            [];
+
+                        if (author) {
+                            mentions.push(
+                                author
+                            );
+                        }
+
+                        if (
+                            participantId
+                        ) {
+
+                            mentions.push(
+                                participantId
+                            );
+                        }
 
                         try {
-
-                            const mentions = [];
-
-                            if (author) {
-                                mentions.push(author);
-                            }
-
-                            if (
-                                typeof participant ===
-                                "string"
-                            ) {
-                                mentions.push(
-                                    participant
-                                );
-                            } else if (
-                                participant?.id
-                            ) {
-                                mentions.push(
-                                    participant.id
-                                );
-                            }
 
                             await sock.sendMessage(
                                 id,
                                 {
-                                    text: messageText,
+                                    text:
+                                        messageText,
                                     mentions
                                 }
                             );
 
-                        } catch (error) {
+                        } catch (
+                            error
+                        ) {
 
                             console.log(
                                 chalk.red(
-                                    "Welcome message error:"
+                                    "Welcome Error:"
                                 ),
                                 error
                             );
                         }
                     }
 
-                } catch (err) {
+                } catch (
+                    err
+                ) {
 
                     console.log(
                         chalk.red(
-                            "Group participant error:"
+                            "Group Update Error:"
                         ),
                         err
                     );
@@ -730,104 +873,136 @@ async function startBot() {
         );
 
         /* =====================================================
-           LID
+           TO LID
         ===================================================== */
 
-        sock.toLid = async (pn) => {
-            return pn;
-        };
+        sock.toLid =
+            async (
+                pn
+            ) => pn;
 
         /* =====================================================
            DECODE JID
         ===================================================== */
 
-        sock.decodeJid = (jid) => {
+        sock.decodeJid =
+            (
+                jid
+            ) => {
 
-            if (!jid) {
-                return jid;
-            }
-
-            if (/:\\d+@/gi.test(jid)) {
-
-                const decode =
-                    jidDecode(jid) || {};
+                if (!jid) {
+                    return jid;
+                }
 
                 if (
-                    decode.user &&
-                    decode.server
+                    /:\d+@/gi.test(
+                        jid
+                    )
                 ) {
 
-                    return (
-                        `${decode.user}@${decode.server}`
-                    );
-                }
-            }
+                    const decode =
+                        jidDecode(
+                            jid
+                        ) || {};
 
-            return jid;
-        };
+                    if (
+                        decode.user &&
+                        decode.server
+                    ) {
+
+                        return (
+                            `${decode.user}@${decode.server}`
+                        );
+                    }
+                }
+
+                return jid;
+            };
 
         /* =====================================================
            DOWNLOAD MEDIA
         ===================================================== */
 
-        sock.downloadMediaMessage = async (
-            m,
-            type,
-            filename = ""
-        ) => {
+        sock.downloadMediaMessage =
+            async (
+                m,
+                type,
+                filename = ""
+            ) => {
 
-            try {
+                try {
 
-                if (
-                    !m ||
-                    !(m.url || m.directPath)
-                ) {
-                    return Buffer.alloc(0);
-                }
+                    if (
+                        !m ||
+                        !(
+                            m.url ||
+                            m.directPath
+                        )
+                    ) {
 
-                const stream =
-                    await downloadContentFromMessage(
-                        m,
-                        type
-                    );
+                        return Buffer.alloc(
+                            0
+                        );
+                    }
 
-                let buffer =
-                    Buffer.alloc(0);
+                    const stream =
+                        await downloadContentFromMessage(
+                            m,
+                            type
+                        );
 
-                for await (
-                    const chunk of stream
-                ) {
+                    let buffer =
+                        Buffer.alloc(
+                            0
+                        );
 
-                    buffer =
-                        Buffer.concat([
-                            buffer,
-                            chunk
-                        ]);
-                }
+                    for await (
+                        const chunk
+                        of stream
+                    ) {
 
-                if (filename) {
+                        buffer =
+                            Buffer.concat([
+                                buffer,
+                                chunk
+                            ]);
+                    }
 
-                    await fs.promises.writeFile(
-                        filename,
-                        buffer
-                    );
-                }
+                    if (
+                        filename
+                    ) {
 
-                return filename &&
-                    fs.existsSync(filename)
-                    ? filename
-                    : buffer;
+                        await fs.promises.writeFile(
+                            filename,
+                            buffer
+                        );
+                    }
 
-            } catch (err) {
+                    return (
+                        filename &&
+                        fs.existsSync(
+                            filename
+                        )
+                    )
+                        ? filename
+                        : buffer;
 
-                console.error(
-                    "Download media error:",
+                } catch (
                     err
-                );
+                ) {
 
-                return Buffer.alloc(0);
-            }
-        };
+                    console.log(
+                        chalk.red(
+                            "Download Error:"
+                        ),
+                        err
+                    );
+
+                    return Buffer.alloc(
+                        0
+                    );
+                }
+            };
 
         /* =====================================================
            DOWNLOAD AND SAVE MEDIA
@@ -851,7 +1026,8 @@ async function startBot() {
                         (
                             message.msg ||
                             message
-                        ).mimetype || "";
+                        ).mimetype ||
+                        "";
 
                     const messageType =
                         message.mtype
@@ -859,7 +1035,9 @@ async function startBot() {
                                 /Message/gi,
                                 ""
                             )
-                            : mime.split("/")[0];
+                            : mime.split(
+                                "/"
+                            )[0];
 
                     const fil =
                         Date.now();
@@ -871,10 +1049,13 @@ async function startBot() {
                         );
 
                     let buffer =
-                        Buffer.alloc(0);
+                        Buffer.alloc(
+                            0
+                        );
 
                     for await (
-                        const chunk of stream
+                        const chunk
+                        of stream
                     ) {
 
                         buffer =
@@ -890,7 +1071,8 @@ async function startBot() {
                         );
 
                     const ext =
-                        type?.ext || "bin";
+                        type?.ext ||
+                        "bin";
 
                     const trueFileName =
                         attachExtension
@@ -904,10 +1086,14 @@ async function startBot() {
 
                     return trueFileName;
 
-                } catch (err) {
+                } catch (
+                    err
+                ) {
 
-                    console.error(
-                        "Save media error:",
+                    console.log(
+                        chalk.red(
+                            "Save Media Error:"
+                        ),
                         err
                     );
 
@@ -919,21 +1105,21 @@ async function startBot() {
 
     } catch (err) {
 
-        console.error(
+        console.log(
             chalk.red(
-                "\n❌ Fatal Bot Error:"
-            ),
-            err
+                "\n❌ DINSTORE ERROR:"
+            )
         );
 
-        setTimeout(() => {
-            startBot();
-        }, 5000);
+        console.log(
+            err?.stack ||
+            err
+        );
     }
 }
 
 /* =========================================================
-   START DINSTORE
+   RUN
 ========================================================= */
 
 startBot();
