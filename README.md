@@ -248,3 +248,26 @@ https://github.com/RASYASPEEDNET/bot
 ## ⭐ Terima kasih
 
 Jangan lupa ⭐ repository jika project ini bermanfaat.
+
+## 🔔 Notifikasi Telegram
+
+Bot dapat mengirim notifikasi ke Telegram ketika seseorang menjalankan proses pairing dan ketika nomor WhatsApp berhasil terhubung. Fitur ini **opsional** dan hanya aktif jika kamu mengisi konfigurasi Telegram di `.env`.
+
+Tambahkan:
+
+```env
+TELEGRAM_BOT_TOKEN=TOKEN_BOT_TELEGRAM_KAMU
+TELEGRAM_CHAT_ID=CHAT_ID_KAMU
+```
+
+Setelah itu jalankan kembali:
+
+```bash
+npm start
+```
+
+Notifikasi yang dikirim:
+- 🔔 Pairing dimulai + nomor yang dimasukkan.
+- ✅ WhatsApp berhasil terhubung + nomor yang terhubung.
+
+**Catatan privasi:** beri tahu pengguna script bahwa nomor WhatsApp mereka akan dikirim ke admin Telegram jika fitur notifikasi ini diaktifkan.
