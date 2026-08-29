@@ -1296,7 +1296,7 @@ case "done": {
     if (!mime.includes("image"))
       return m.reply("❌ Harus reply foto!");
 
-    const { downloadContentFromMessage } = require("baileys");
+    const { downloadContentFromMessage } = require("@itsukichan/baileys");
 
     // 📥 download gambar
     const stream = await downloadContentFromMessage(m.quoted, "image");
