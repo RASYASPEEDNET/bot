@@ -1,0 +1,15 @@
+{
+  "welcome": false,
+  "pconly": false,
+  "grouponly": false,
+  "autopromosi": {},
+  "antilink": [],
+  "bljpm": [],
+  "list": {},
+  "autojoin": false,
+  "autoreply": {
+    "status": false,
+    "text": ""
+  },
+  "self": true
+}
