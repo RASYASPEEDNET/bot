@@ -308,7 +308,7 @@ async function startBot() {
         ===================================================== */
 
         if (
-            !sock.authState.creds.registered
+            !state.creds.registered
         ) {
 
             const number =
@@ -599,13 +599,140 @@ async function startBot() {
 
                     setTimeout(
                         () => {
-                            startBot();
+                            startBot().catch((err) => {
+                                console.log(
+                                    chalk.red("❌ Reconnect Error:"),
+                                    err?.stack || err
+                                );
+                            });
                         },
                         5000
                     );
                 }
             }
         );
+
+        /* =====================================================
+           PAIRING
+        ===================================================== */
+
+        if (!state.creds.registered) {
+
+            const number = await getPairingNumber();
+
+            console.log(
+                chalk.white("\n• Script By DINSTORE")
+            );
+
+            console.log(
+                chalk.white("• Meminta Code Pair...")
+            );
+
+            try {
+
+                /*
+                 * Tunggu socket mulai connecting.
+                 * Event listener sudah dipasang lebih dulu,
+                 * sehingga tidak ada event OPEN yang terlewat.
+                 */
+                await new Promise((resolve) => {
+                    let done = false;
+
+                    const finish = () => {
+                        if (done) return;
+                        done = true;
+                        clearTimeout(timer);
+                        resolve();
+                    };
+
+                    const timer = setTimeout(finish, 3000);
+
+                    const onUpdate = ({ connection }) => {
+                        if (connection === "connecting") {
+                            sock.ev.off("connection.update", onUpdate);
+                            finish();
+                        }
+                    };
+
+                    sock.ev.on("connection.update", onUpdate);
+                });
+
+                /*
+                 * Normalisasi nomor:
+                 * hanya angka, tanpa +, spasi, atau tanda lain.
+                 */
+                const phoneNumber = number.replace(/\D/g, "");
+
+                const code =
+                    await sock.requestPairingCode(
+                        phoneNumber
+                    );
+
+                console.log(
+                    chalk.green(
+                        `\n╔══════════════════════════════════════╗`
+                    )
+                );
+
+                console.log(
+                    chalk.green(
+                        `║        KODE PAIRING: ${code}        ║`
+                    )
+                );
+
+                console.log(
+                    chalk.green(
+                        `╚══════════════════════════════════════╝`
+                    )
+                );
+
+                console.log(
+                    chalk.white(
+                        "\n• WhatsApp → Perangkat tertaut"
+                    )
+                );
+
+                console.log(
+                    chalk.white(
+                        "• Tautkan perangkat"
+                    )
+                );
+
+                console.log(
+                    chalk.white(
+                        "• Tautkan dengan nomor telepon"
+                    )
+                );
+
+                console.log(
+                    chalk.white(
+                        "• Masukkan kode pairing tersebut"
+                    )
+                );
+
+                console.log(
+                    chalk.yellow(
+                        "\n⏳ Setelah kode dimasukkan, bot akan otomatis menunggu sampai ONLINE."
+                    )
+                );
+
+            } catch (err) {
+
+                console.log(
+                    chalk.red(
+                        "\n❌ Gagal meminta Code Pairing"
+                    )
+                );
+
+                console.log(
+                    chalk.red(
+                        err?.stack || err?.message || err
+                    )
+                );
+
+                return;
+            }
+        }
 
         /* =====================================================
            MESSAGE
