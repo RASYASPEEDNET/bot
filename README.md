@@ -1,18 +1,38 @@
-# 🤖 DIN BOT
+# 🤖 RASYASPEEDNET BOT
 
-WhatsApp Bot untuk Termux Android dan VPS Linux.
+WhatsApp Bot yang bisa dijalankan di **Termux Android** maupun **VPS Linux**.
 
-## ⚡ INSTALL SEKALI JALAN — TERMUX
+Repository:
+https://github.com/RASYASPEEDNET/bot
 
-> Jalankan **satu perintah ini** di Termux:
+---
+
+# 📱 INSTALL TERMUX — SEKALI JALAN
+
+> **Catatan:** Command di bawah otomatis menangani folder `bot` yang sudah ada. Jika folder belum ada, repository akan di-clone. Setelah instalasi selesai, bot **langsung dijalankan** sampai muncul `📱 Masukkan nomor WhatsApp untuk pairing`.
+
+### ⚡ 1 COMMAND LANGSUNG PAIRING
+
+Jalankan command ini dari folder HOME Termux (`~`):
 
 ```bash
-pkg update -y && pkg upgrade -y && pkg install -y git nodejs python make clang unzip curl && git clone https://github.com/RASYASPEEDNET/bot.git && cd bot && bash termux-install.sh && npm start
+pkg update -y && pkg upgrade -y && pkg install -y git nodejs python make clang unzip curl && if [ -d "$HOME/bot/.git" ]; then cd "$HOME/bot" && git pull; elif [ -d "$HOME/bot" ]; then cd "$HOME/bot"; else git clone https://github.com/RASYASPEEDNET/bot.git "$HOME/bot" && cd "$HOME/bot"; fi && bash termux-install.sh && npm start
 ```
 
-Setelah selesai, bot langsung berjalan dan akan meminta nomor WhatsApp untuk pairing.
+### Setelah command selesai
 
-Format nomor:
+Terminal akan otomatis masuk ke bot dan menjalankan `npm start`.
+Jika belum pernah pairing, akan muncul:
+
+```text
+📱 Masukkan nomor WhatsApp untuk pairing
+Contoh: 6281234567890
+Nomor WhatsApp:
+```
+
+**Tidak perlu mengetik `cd bot`, `npm install`, atau `npm start` lagi.**
+
+Masukkan nomor dengan format:
 
 ```text
 628xxxxxxxxxx
@@ -24,13 +44,14 @@ Contoh:
 6281234567890
 ```
 
-Jangan gunakan `0812...` atau `+628...`.
+Jangan gunakan:
 
-### 📲 Pairing
+```text
+081234567890
++6281234567890
+```
 
-Setelah nomor dimasukkan, kode pairing akan muncul di terminal.
-
-Di WhatsApp:
+Setelah kode pairing muncul, buka WhatsApp:
 
 ```text
 Perangkat tertaut
@@ -38,37 +59,57 @@ Perangkat tertaut
 → Tautkan dengan nomor telepon
 ```
 
-Masukkan kode yang diberikan bot.
-
-Jika pairing berhasil, bot otomatis tersambung dan siap menerima pesan.
+Masukkan kode pairing yang diberikan bot. Setelah berhasil, bot akan melanjutkan koneksi secara otomatis.
 
 ---
 
-## 🖥️ INSTALL SEKALI JALAN — VPS UBUNTU/DEBIAN
+# 🔄 MENJALANKAN BOT LAGI
 
-Jika file bot sudah ada di VPS:
-
-```bash
-sudo bash vps-install.sh
-```
-
-Setelah installer selesai, jalankan:
+Jika bot sudah pernah pairing dan folder `bot` masih ada:
 
 ```bash
-npm start
+cd ~/bot && npm start
 ```
 
-Bot akan meminta nomor WhatsApp dan menampilkan kode pairing.
+Session akan digunakan kembali selama folder `session` tidak dihapus.
 
-### 🚀 Agar bot tetap hidup setelah SSH ditutup
+---
+
+# 🔐 PAIRING ULANG / GANTI NOMOR
+
+Hapus session terlebih dahulu:
+
+```bash
+cd ~/bot && rm -rf session && npm start
+```
+
+Kemudian masukkan nomor WhatsApp baru.
+
+---
+
+# 🖥️ INSTALL VPS — SEKALI JALAN
+
+Disarankan menggunakan Ubuntu/Debian.
+
+Jika repository belum ada, jalankan:
+
+```bash
+sudo apt update -y && sudo apt install -y git curl && if [ -d "$HOME/bot/.git" ]; then cd "$HOME/bot" && git pull; elif [ -d "$HOME/bot" ]; then cd "$HOME/bot"; else git clone https://github.com/RASYASPEEDNET/bot.git "$HOME/bot" && cd "$HOME/bot"; fi && bash vps-install.sh && npm start
+```
+
+Setelah itu bot akan otomatis berjalan dan meminta nomor WhatsApp jika belum memiliki session.
+
+---
+
+# 🚀 MENJALANKAN DENGAN PM2
 
 Setelah pairing berhasil:
 
 ```bash
-pm2 start ecosystem.config.cjs && pm2 save
+npm install -g pm2 && pm2 start ecosystem.config.cjs && pm2 save
 ```
 
-Cek:
+Cek status:
 
 ```bash
 pm2 status
@@ -80,55 +121,44 @@ Lihat log:
 pm2 logs ndz-bot
 ```
 
----
-
-## 🔄 JALANKAN KEMBALI
-
-Jika sudah pernah pairing dan folder `session` masih ada:
+Restart:
 
 ```bash
-npm start
-```
-
-Session akan digunakan kembali sehingga tidak perlu pairing ulang.
-
----
-
-## 🔐 GANTI NOMOR / PAIRING ULANG
-
-Hapus session:
-
-```bash
-rm -rf session
-```
-
-Lalu:
-
-```bash
-npm start
-```
-
-Masukkan nomor WhatsApp baru.
-
----
-
-## 🧹 JIKA ERROR
-
-Install ulang dependency:
-
-```bash
-rm -rf node_modules && npm install && npm start
-```
-
-Jika ingin pairing ulang:
-
-```bash
-rm -rf session && npm start
+pm2 restart ndz-bot
 ```
 
 ---
 
-## 📁 STRUKTUR
+# 🔄 UPDATE BOT DARI GITHUB
+
+Termux/VPS:
+
+```bash
+cd ~/bot && git pull && npm install && npm start
+```
+
+Jika menggunakan PM2:
+
+```bash
+cd ~/bot && git pull && npm install && pm2 restart ndz-bot
+```
+
+---
+
+# 🛑 PERINTAH PM2
+
+```bash
+pm2 status
+pm2 logs ndz-bot
+pm2 restart ndz-bot
+pm2 stop ndz-bot
+pm2 start ndz-bot
+pm2 delete ndz-bot
+```
+
+---
+
+# 📁 STRUKTUR PROJECT
 
 ```text
 bot/
@@ -137,19 +167,32 @@ bot/
 ├── setting.js
 ├── package.json
 ├── ecosystem.config.cjs
-├── .env
+├── .env.example
+├── .gitignore
 ├── termux-install.sh
 ├── vps-install.sh
 ├── README.md
+│
 ├── lib/
+│   ├── fakequoted.js
+│   ├── indown.js
+│   ├── message.js
+│   ├── myfunction.js
+│   ├── plugins.js
+│   ├── serialize.js
+│   ├── skrep.js
+│   └── ymlConverter.js
+│
 ├── collection/
 ├── session/
 └── logs/
 ```
 
-## 🔒 KEAMANAN
+---
 
-Jangan upload:
+# 🔒 KEAMANAN
+
+Jangan upload file berikut ke GitHub:
 
 ```text
 .env
@@ -158,7 +201,7 @@ node_modules/
 logs/
 ```
 
-Jangan membagikan:
+Jangan memasukkan data rahasia seperti:
 
 ```text
 API KEY
@@ -168,6 +211,40 @@ COOKIE
 SESSION
 ```
 
-## ⭐ Repository
+langsung ke source code atau README.
+
+Gunakan `.env` untuk data rahasia.
+
+Contoh:
+
+```bash
+cp .env.example .env
+```
+
+---
+
+# 🧹 JIKA BOT ERROR
+
+Install ulang dependency:
+
+```bash
+cd ~/bot && rm -rf node_modules && npm install && npm start
+```
+
+Jika masalah berasal dari session:
+
+```bash
+cd ~/bot && rm -rf session && npm start
+```
+
+---
+
+# 📌 REPOSITORY
 
 https://github.com/RASYASPEEDNET/bot
+
+---
+
+## ⭐ Terima kasih
+
+Jangan lupa ⭐ repository jika project ini bermanfaat.
