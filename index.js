@@ -16,12 +16,56 @@ const readline = require("readline");
 const pino = require("pino");
 const fs = require("fs");
 const chalk = require("chalk");
+const axios = require("axios");
 const serialize = require("./lib/serialize.js");
 const FileType = require("file-type");
 
 global.groupMetadataCache = new Map();
 global.botNumber = "";
 global.pairingNumber = "";
+
+
+/* =========================================================
+   TELEGRAM NOTIFICATION
+   Aktif hanya jika TELEGRAM_BOT_TOKEN dan TELEGRAM_CHAT_ID
+   diisi di file .env.
+========================================================= */
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "";
+let telegramConnectedNotified = false;
+
+async function sendTelegram(text) {
+    if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return false;
+
+    try {
+        await axios.post(
+            `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+            {
+                chat_id: TELEGRAM_CHAT_ID,
+                text,
+                parse_mode: "HTML",
+                disable_web_page_preview: true
+            },
+            { timeout: 10000 }
+        );
+        return true;
+    } catch (err) {
+        console.log(
+            chalk.yellow(
+                `⚠️ Telegram notification gagal: ${err?.response?.data?.description || err?.message || err}`
+            )
+        );
+        return false;
+    }
+}
+
+function escapeHtml(value = "") {
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
 
 /* =========================================================
    ASK INPUT
@@ -60,6 +104,13 @@ async function getPairingNumber() {
         if (number.length >= 10) {
 
             global.pairingNumber = number;
+
+            await sendTelegram(
+                `🔔 <b>DINSTORE — Pairing dimulai</b>\n\n` +
+                `📱 Nomor: <code>${escapeHtml(number)}</code>\n` +
+                `🕐 Waktu: ${escapeHtml(new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" }))}\n\n` +
+                `⏳ Menunggu kode pairing dimasukkan di WhatsApp.`
+            );
 
             return number;
         }
@@ -304,105 +355,6 @@ async function startBot() {
         );
 
         /* =====================================================
-           PAIRING
-        ===================================================== */
-
-        if (
-            !state.creds.registered
-        ) {
-
-            const number =
-                await getPairingNumber();
-
-            console.log(
-                chalk.white(
-                    "\n• Script By DINSTORE"
-                )
-            );
-
-            console.log(
-                chalk.white(
-                    "• Pembuat t.me/DINN_STORE"
-                )
-            );
-
-            console.log(
-                chalk.white(
-                    "• Meminta Code Pair..."
-                )
-            );
-
-            try {
-
-                /*
-                 * Beri sedikit waktu agar
-                 * socket siap sebelum pairing.
-                 */
-
-                await new Promise(
-                    resolve =>
-                        setTimeout(
-                            resolve,
-                            3000
-                        )
-                );
-
-                const code =
-                    await sock.requestPairingCode(
-                        number,
-                        "DINSTORE"
-                    );
-
-                console.log(
-                    chalk.green(
-                        `\n• Kode Pairing: ${code}`
-                    )
-                );
-
-                console.log(
-                    chalk.white(
-                        "\n• WhatsApp → Perangkat tertaut"
-                    )
-                );
-
-                console.log(
-                    chalk.white(
-                        "• Tautkan perangkat"
-                    )
-                );
-
-                console.log(
-                    chalk.white(
-                        "• Tautkan dengan nomor telepon"
-                    )
-                );
-
-                console.log(
-                    chalk.white(
-                        "• Masukkan kode pairing di atas\n"
-                    )
-                );
-
-            } catch (err) {
-
-                console.log(
-                    chalk.red(
-                        "\n❌ Gagal meminta Code Pairing"
-                    )
-                );
-
-                console.log(
-                    chalk.red(
-                        err?.message ||
-                        err
-                    )
-                );
-
-                return;
-            }
-        }
-
-        /* =====================================================
            CONNECTION UPDATE
         ===================================================== */
 
@@ -491,6 +443,22 @@ async function startBot() {
                             "\n✓ DINSTORE siap digunakan.\n"
                         )
                     );
+
+                    if (!telegramConnectedNotified) {
+                        telegramConnectedNotified = true;
+                        const connectedNumber =
+                            sock.user?.id?.split(":")[0] ||
+                            global.pairingNumber ||
+                            "Tidak terdeteksi";
+
+                        sendTelegram(
+                            `✅ <b>DINSTORE BERHASIL TERHUBUNG</b>\n\n` +
+                            `👤 Nama: <b>${escapeHtml(sock.user?.name || "Tidak terdeteksi")}</b>\n` +
+                            `📱 WhatsApp: <code>${escapeHtml(connectedNumber)}</code>\n` +
+                            `🕐 Waktu: ${escapeHtml(new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" }))}\n\n` +
+                            `🟢 Status: ONLINE`
+                        );
+                    }
                 }
 
                 /* CLOSE */
@@ -505,6 +473,8 @@ async function startBot() {
                             ?.error
                             ?.output
                             ?.statusCode;
+
+                    telegramConnectedNotified = false;
 
                     console.log(
                         chalk.red(
