@@ -7,8 +7,7 @@
 [![GitHub](https://img.shields.io/badge/GitHub-RASYASPEEDNET-181717?style=for-the-badge&logo=github)](https://github.com/RASYASPEEDNET/bot)
 [![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933?style=for-the-badge&logo=node.js)](https://nodejs.org/)
 [![WhatsApp](https://img.shields.io/badge/WhatsApp-Bot-25D366?style=for-the-badge&logo=whatsapp)](https://www.whatsapp.com/)
-[![Termux](https://img.shields.io/badge/Termux-Android-black?style=for-the-badge&logo=android)]
-[![VPS](https://img.shields.io/badge/VPS-Linux-blue?style=for-the-badge&logo=linux)]
+[![Termux](https://img.shields.io/badge/Termux-Android-black?style=for-the-badge&logo=android)](https://termux.dev/)
 
 **WhatsApp Bot yang dapat dijalankan di Android Termux maupun VPS Linux.**
 
@@ -30,12 +29,13 @@
 - [📱 Install Termux](#-install-termux)
 - [🔑 Pairing WhatsApp](#-pairing-whatsapp)
 - [🛠️ Perintah Termux](#️-perintah-termux)
+- [🔌 Mengatasi Koneksi](#-mengatasi-koneksi-bot)
 - [🔄 Update Bot](#-update-bot)
 - [🖥️ Install VPS](#️-install-vps)
 - [🚀 PM2](#-pm2)
 - [🔔 Telegram Notification](#-telegram-notification)
 - [📁 Struktur Project](#-struktur-project)
-- [🔐 Keamanan GitHub](#-keamanan-github)
+- [🔐 Keamanan](#-keamanan)
 - [🛠️ Troubleshooting](#️-troubleshooting)
 - [🗑️ Uninstall](#️-uninstall)
 - [⭐ Support](#-support)
@@ -72,7 +72,7 @@ Jalankan dari folder HOME Termux:
 pkg update -y && pkg upgrade -y && pkg install -y git nodejs python make clang unzip curl && if [ -d "$HOME/bot/.git" ]; then cd "$HOME/bot" && git pull; elif [ -d "$HOME/bot" ]; then cd "$HOME/bot"; else git clone https://github.com/RASYASPEEDNET/bot.git "$HOME/bot" && cd "$HOME/bot"; fi && bash termux-install.sh && npm start
 ```
 
-Command ini otomatis:
+Command tersebut otomatis:
 
 ```text
 ┌──────────────────────────────────────────┐
@@ -214,7 +214,7 @@ Jangan hapus folder:
 session/
 ```
 
-Karena folder tersebut digunakan untuk menyimpan session koneksi WhatsApp.
+Session digunakan untuk mempertahankan koneksi WhatsApp.
 
 Jika session masih ada:
 
@@ -244,8 +244,6 @@ session tidak ditemukan
 
 # 🛠️ PERINTAH TERMUX
 
-Semua command berikut dijalankan dari folder bot.
-
 ## 📂 Masuk ke folder bot
 
 ```bash
@@ -270,19 +268,58 @@ cd ~/bot && npm start
 
 ---
 
+# 🔌 MENGATASI KONEKSI BOT
+
+Jika muncul:
+
+```text
+❌ Koneksi WhatsApp terputus.
+• Disconnect Reason: 428
+```
+
+atau:
+
+```text
+❌ Koneksi WhatsApp terputus.
+• Disconnect Reason: 408
+```
+
+dan bot terus melakukan reconnect, bisa jadi terdapat proses Node.js yang masih berjalan atau lebih dari satu proses bot aktif.
+
+## 🛑 HENTIKAN PROSES NODE.JS
+
+Jalankan:
+
+```bash
+pkill -f "node"
+```
+
+Kemudian:
+
+```bash
+cd ~/bot
+npm start
+```
+
+### ⚡ SEKALI JALAN
+
+```bash
+pkill -f "node" && cd ~/bot && npm start
+```
+
+> ⚠️ `pkill -f "node"` akan menghentikan semua proses Node.js yang sedang berjalan di Termux.
+
+---
+
 # 🔑 PAIRING ULANG / GANTI NOMOR
 
-Jika ingin menghubungkan nomor WhatsApp baru:
+Jika ingin menghubungkan nomor WhatsApp lain:
 
 ```bash
 cd ~/bot && rm -rf session && npm start
 ```
 
-Bot akan meminta:
-
-```text
-📱 Masukkan nomor WhatsApp untuk pairing
-```
+Setelah itu bot akan meminta nomor baru.
 
 > ⚠️ Perintah ini menghapus session WhatsApp lama.
 
@@ -290,7 +327,7 @@ Bot akan meminta:
 
 # 🧹 HAPUS SESSION SAJA
 
-Jika ingin menghapus session tanpa langsung menjalankan bot:
+Jika hanya ingin menghapus session:
 
 ```bash
 cd ~/bot && rm -rf session
@@ -322,13 +359,13 @@ npm start
 
 # 🛠️ PERBAIKI DEPENDENCY
 
-Jika muncul error:
+Jika muncul:
 
 ```text
 Cannot find module
 ```
 
-atau dependency rusak:
+jalankan:
 
 ```bash
 cd ~/bot && rm -rf node_modules && npm install
@@ -350,13 +387,13 @@ Untuk mengambil versi terbaru dari GitHub:
 cd ~/bot && git pull
 ```
 
-Install dependency terbaru:
+Kemudian:
 
 ```bash
 npm install
 ```
 
-Jalankan:
+Lalu:
 
 ```bash
 npm start
@@ -366,15 +403,13 @@ npm start
 
 # ⚡ UPDATE + START
 
-Semua sekaligus:
-
 ```bash
 cd ~/bot && git pull && npm install && npm start
 ```
 
 ---
 
-# 🧹 UPDATE TANPA MENGHAPUS SESSION
+# 🛡️ UPDATE TANPA MENGHAPUS SESSION
 
 Gunakan:
 
@@ -382,25 +417,23 @@ Gunakan:
 cd ~/bot && git pull && npm install && npm start
 ```
 
-Session tidak perlu dihapus.
+Session tetap dipertahankan.
 
 ---
 
 # 🗑️ HAPUS BOT
 
-Jika ingin menghapus seluruh bot:
+Untuk menghapus seluruh bot:
 
 ```bash
 rm -rf ~/bot
 ```
 
-> ⚠️ Ini akan menghapus source code, dependency, konfigurasi lokal, dan session yang berada di `~/bot`.
+> ⚠️ Perintah ini menghapus source code, dependency, `.env`, dan session yang berada di folder `~/bot`.
 
 ---
 
 # ♻️ INSTALL ULANG DARI AWAL
-
-Jika ingin benar-benar mulai dari awal:
 
 ```bash
 rm -rf ~/bot && git clone https://github.com/RASYASPEEDNET/bot.git ~/bot && cd ~/bot && npm install && cp -n .env.example .env && npm start
@@ -415,6 +448,8 @@ rm -rf ~/bot && git clone https://github.com/RASYASPEEDNET/bot.git ~/bot && cd ~
 | 📂 Masuk folder | `cd ~/bot` |
 | ▶️ Jalankan | `cd ~/bot && npm start` |
 | 🔄 Restart | `cd ~/bot && npm start` |
+| 🔌 Stop semua Node | `pkill -f "node"` |
+| ⚡ Stop + start | `pkill -f "node" && cd ~/bot && npm start` |
 | 🔑 Pairing ulang | `cd ~/bot && rm -rf session && npm start` |
 | 🧹 Hapus session | `cd ~/bot && rm -rf session` |
 | 📦 Install dependency | `cd ~/bot && npm install` |
@@ -422,7 +457,6 @@ rm -rf ~/bot && git clone https://github.com/RASYASPEEDNET/bot.git ~/bot && cd ~
 | 🔄 Update | `cd ~/bot && git pull` |
 | ⚡ Update + start | `cd ~/bot && git pull && npm install && npm start` |
 | 🗑️ Hapus bot | `rm -rf ~/bot` |
-| ♻️ Install ulang | `rm -rf ~/bot && git clone https://github.com/RASYASPEEDNET/bot.git ~/bot && cd ~/bot && npm install && cp -n .env.example .env && npm start` |
 
 ---
 
@@ -433,8 +467,6 @@ Untuk Ubuntu/Debian:
 ```bash
 sudo apt update -y && sudo apt install -y git curl && if [ -d "$HOME/bot/.git" ]; then cd "$HOME/bot" && git pull; elif [ -d "$HOME/bot" ]; then cd "$HOME/bot"; else git clone https://github.com/RASYASPEEDNET/bot.git "$HOME/bot" && cd "$HOME/bot"; fi && bash vps-install.sh && npm start
 ```
-
-Setelah selesai, bot akan berjalan.
 
 Jika belum memiliki session:
 
@@ -461,7 +493,7 @@ cd ~/bot
 pm2 start ecosystem.config.cjs
 ```
 
-## Simpan konfigurasi
+## Simpan
 
 ```bash
 pm2 save
@@ -517,7 +549,7 @@ cd ~/bot && git pull && npm install && pm2 restart ndz-bot
 
 Bot dapat menggunakan sistem notifikasi Telegram.
 
-Contoh alur:
+Alur:
 
 ```text
 ┌───────────────────┐
@@ -557,8 +589,6 @@ Notifikasi dapat digunakan untuk:
 
 # 🔐 KONFIGURASI `.ENV`
 
-Jangan memasukkan token rahasia langsung ke source code.
-
 Buat `.env` dari template:
 
 ```bash
@@ -580,46 +610,34 @@ NOTIFY_KEY=KEY_RAHASIA_KAMU
 SESSION_DIR=./session
 ```
 
-Jika sistem notification server membutuhkan konfigurasi Telegram, simpan:
+> Jangan upload `.env` ke GitHub.
+
+---
+
+# 🔒 KEAMANAN TELEGRAM
+
+Jika menggunakan Notification Server / Cloudflare Worker, token Telegram sebaiknya disimpan di server notification.
+
+Jangan memasukkan:
 
 ```text
 TELEGRAM_BOT_TOKEN
 TELEGRAM_CHAT_ID
 ```
 
-di server notification dan **jangan masukkan token tersebut ke GitHub**.
+ke repository publik.
 
----
-
-# 🔒 KEAMANAN TELEGRAM
-
-Struktur yang disarankan:
+Struktur:
 
 ```text
-                    ┌─────────────────┐
-                    │  WhatsApp User  │
-                    └────────┬────────┘
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │    Bot Node.js  │
-                    └────────┬────────┘
-                             │
-                      NOTIFY_URL
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │ Notification    │
-                    │ Server          │
-                    └────────┬────────┘
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │ Telegram Admin  │
-                    └─────────────────┘
+WhatsApp Bot
+      │
+      ▼
+Notification Server
+      │
+      ▼
+Telegram Admin
 ```
-
-Dengan cara ini token Telegram tidak perlu disimpan di repository publik.
 
 ---
 
@@ -635,11 +653,9 @@ RASYASPEEDNET/
     ├── 📄 setting.js
     ├── 📄 package.json
     ├── 📄 ecosystem.config.cjs
-    │
     ├── 📄 README.md
     ├── 📄 .env.example
     ├── 📄 .gitignore
-    │
     ├── 📄 termux-install.sh
     ├── 📄 vps-install.sh
     │
@@ -658,13 +674,11 @@ RASYASPEEDNET/
     └── 📁 session/
 ```
 
-> `session/` dibuat otomatis setelah proses pairing dan **tidak boleh di-upload ke repository publik**.
+> `session/` dibuat otomatis setelah pairing dan jangan di-upload ke GitHub.
 
 ---
 
 # 🔐 KEAMANAN GITHUB
-
-Repository publik harus menggunakan `.gitignore`.
 
 ## ❌ JANGAN UPLOAD
 
@@ -714,57 +728,17 @@ collection/
 
 ---
 
-# 📄 `.ENV.EXAMPLE`
-
-Contoh isi:
-
-```env
-# Notification Server
-NOTIFY_URL=
-NOTIFY_KEY=
-
-# Session
-SESSION_DIR=./session
-```
-
-> Jangan masukkan token asli ke `.env.example`.
-
----
-
-# 🛡️ CONTOH `.GITIGNORE`
-
-Gunakan:
-
-```gitignore
-node_modules/
-.env
-session/
-sessions/
-auth/
-creds/
-logs/
-*.log
-*.tmp
-npm-debug.log*
-```
-
----
-
 # 🛠️ TROUBLESHOOTING
 
 ## ❌ Cannot find module './message.js'
 
-Pastikan file:
-
-```text
-message.js
-```
-
-berada di:
+Pastikan:
 
 ```text
 ~/bot/message.js
 ```
+
+tersedia.
 
 Cek:
 
@@ -773,7 +747,7 @@ cd ~/bot
 ls -la
 ```
 
-Harus ada:
+Harus terlihat:
 
 ```text
 index.js
@@ -781,13 +755,13 @@ message.js
 package.json
 ```
 
-Jika file masih berbentuk ZIP:
+Jika file masih:
 
 ```text
 message.js.zip
 ```
 
-extract terlebih dahulu.
+extract:
 
 ```bash
 unzip -o message.js.zip
@@ -801,9 +775,7 @@ npm start
 
 ---
 
-# ❌ Cannot find module
-
-Jalankan:
+## ❌ Cannot find module
 
 ```bash
 cd ~/bot
@@ -814,58 +786,100 @@ npm start
 
 ---
 
-# ❌ `npm start` TIDAK MENJALANKAN BOT
+## ❌ `npm start` tidak berjalan
 
-Cek:
+Periksa:
 
 ```bash
 cd ~/bot
 cat package.json
 ```
 
-Pastikan terdapat:
+Pastikan terdapat script:
 
 ```json
-"scripts": {
-  "start": "node index.js"
+{
+  "scripts": {
+    "start": "node index.js"
+  }
 }
 ```
 
 ---
 
-# ❌ SESSION BERMASALAH
+## ❌ 408 / 428
 
-Jika koneksi WhatsApp tidak dapat digunakan:
+Jika muncul:
 
-```bash
-cd ~/bot
-rm -rf session
-npm start
+```text
+Disconnect Reason: 408
 ```
 
-Kemudian pairing ulang.
+atau:
 
-> Gunakan perintah ini hanya jika memang siap melakukan pairing kembali.
+```text
+Disconnect Reason: 428
+```
 
----
+coba:
 
-# ❌ WHATSAPP DISCONNECT
+```bash
+pkill -f "node"
+```
 
-Coba:
+kemudian:
 
 ```bash
 cd ~/bot && npm start
 ```
 
-Jika masih bermasalah:
+Atau langsung:
 
 ```bash
-cd ~/bot && rm -rf session && npm start
+pkill -f "node" && cd ~/bot && npm start
+```
+
+### ⚠️ Jangan langsung hapus session
+
+Jika bot masih bisa reconnect:
+
+```text
+408 / 428
+   ↓
+reconnect
+   ↓
+ONLINE
+```
+
+**jangan gunakan `rm -rf session` terlebih dahulu.**
+
+Gunakan penghapusan session hanya jika memang ingin pairing ulang atau session sudah rusak.
+
+---
+
+## ❌ Bot terus restart
+
+Cek proses Node:
+
+```bash
+ps aux | grep node
+```
+
+Hentikan proses:
+
+```bash
+pkill -f "node"
+```
+
+Kemudian jalankan satu bot saja:
+
+```bash
+cd ~/bot && npm start
 ```
 
 ---
 
-# ❌ TELEGRAM TIDAK MENERIMA NOTIFIKASI
+## ❌ Telegram tidak menerima notifikasi
 
 Periksa:
 
@@ -874,54 +888,40 @@ NOTIFY_URL
 NOTIFY_KEY
 ```
 
-Pastikan notification server aktif.
+Pastikan Notification Server aktif.
 
-Periksa juga:
+Jika menggunakan Telegram langsung, periksa:
 
 ```text
 TELEGRAM_BOT_TOKEN
 TELEGRAM_CHAT_ID
 ```
 
-pada server notification.
-
-Jangan memasukkan token Telegram ke GitHub.
+Jangan memasukkan token Telegram ke repository publik.
 
 ---
 
-# 🧹 BERSIHKAN NODE_MODULES
-
-Jika ingin membersihkan dependency:
+# 🧹 RESET DEPENDENCY
 
 ```bash
-cd ~/bot && rm -rf node_modules
-```
-
-Kemudian install kembali:
-
-```bash
-npm install
+cd ~/bot && rm -rf node_modules && npm install && npm start
 ```
 
 ---
 
-# 🔄 BERSIHKAN SESSION
+# 🔄 RESET SESSION
 
 ```bash
-cd ~/bot && rm -rf session
+cd ~/bot && rm -rf session && npm start
 ```
 
-Kemudian:
-
-```bash
-npm start
-```
+Bot akan meminta pairing ulang.
 
 ---
 
 # ♻️ RESET BOT
 
-Jika ingin reset dependency + session:
+Untuk reset dependency dan session:
 
 ```bash
 cd ~/bot && rm -rf node_modules session && npm install && npm start
@@ -931,36 +931,74 @@ cd ~/bot && rm -rf node_modules session && npm install && npm start
 
 # 💥 RESET TOTAL
 
-Jika ingin menghapus seluruh bot:
+Hapus seluruh bot:
 
 ```bash
 rm -rf ~/bot
 ```
 
-Kemudian install kembali:
+Kemudian clone kembali:
 
 ```bash
 git clone https://github.com/RASYASPEEDNET/bot.git ~/bot
+```
+
+Masuk:
+
+```bash
 cd ~/bot
+```
+
+Install:
+
+```bash
 npm install
-cp -n .env.example .env
+```
+
+Buat `.env`:
+
+```bash
+cp .env.example .env
+```
+
+Jalankan:
+
+```bash
 npm start
 ```
 
 ---
 
-# 📌 COMMAND PALING PENTING
+# 🗑️ UNINSTALL
 
-### 🚀 Install pertama kali
+Jika ingin menghapus bot dari Termux:
 
 ```bash
-pkg update -y && pkg upgrade -y && pkg install -y git nodejs python make clang unzip curl && git clone https://github.com/RASYASPEEDNET/bot.git ~/bot && cd ~/bot && bash termux-install.sh && npm start
+rm -rf ~/bot
 ```
 
-### ▶️ Jalankan
+Jika juga ingin menghapus package yang dipasang khusus untuk bot, hapus sesuai kebutuhan secara manual.
+
+---
+
+# 📌 COMMAND PALING PENTING
+
+### 🚀 Install
+
+```bash
+pkg update -y && pkg upgrade -y && pkg install -y git nodejs python make clang unzip curl && if [ -d "$HOME/bot/.git" ]; then cd "$HOME/bot" && git pull; elif [ -d "$HOME/bot" ]; then cd "$HOME/bot"; else git clone https://github.com/RASYASPEEDNET/bot.git "$HOME/bot" && cd "$HOME/bot"; fi && bash termux-install.sh && npm start
+```
+
+### ▶️ Start
 
 ```bash
 cd ~/bot && npm start
+```
+
+### 🔌 Perbaiki proses Node
+
+```bash
+pkill -f "node" && cd ~/bot && npm start
 ```
 
 ### 🔑 Pairing ulang
@@ -975,16 +1013,10 @@ cd ~/bot && rm -rf session && npm start
 cd ~/bot && git pull && npm install && npm start
 ```
 
-### 🛠️ Perbaiki dependency
+### 🛠️ Repair dependency
 
 ```bash
 cd ~/bot && rm -rf node_modules && npm install && npm start
-```
-
-### ♻️ Reset session + dependency
-
-```bash
-cd ~/bot && rm -rf node_modules session && npm install && npm start
 ```
 
 ### 🗑️ Hapus bot
@@ -997,9 +1029,13 @@ rm -rf ~/bot
 
 # 🌐 REPOSITORY
 
-```text
+<div align="center">
+
+### 🔗 RASYASPEEDNET BOT
+
 https://github.com/RASYASPEEDNET/bot
-```
+
+</div>
 
 ---
 
@@ -1016,7 +1052,7 @@ Jika project ini bermanfaat, jangan lupa memberikan ⭐ pada repository.
 ║                                      ║
 ║       WhatsApp Automation            ║
 ║       Termux • VPS • Pairing         ║
-║       Telegram Notification          ║
+║       Telegram Notification           ║
 ║                                      ║
 ╚══════════════════════════════════════╝
 ```
